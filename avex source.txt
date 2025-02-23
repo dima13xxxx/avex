@@ -1,0 +1,2916 @@
+local ScriptLoaded, ScriptError = pcall(function()
+    if shared.AvexLoaded then return end
+    shared.AvexLoaded = true
+    
+    local StartTick = tick()
+    local ScriptRunning = true
+    
+    local UserInterface, SaveManager, ThemeManager = loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/EXFTB/LinoriaLib/main/Library.lua"))(), loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/EXFTB/LinoriaLib/main/SaveManager.lua"))(), loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/EXFTB/LinoriaLib/main/ThemeManager.lua"))() --async so it doesnt freeze the fucking game
+    ThemeManager:SetLibrary(UserInterface)
+    ThemeManager:SetFolder("Project Avex - The Electric State")
+    SaveManager:SetLibrary(UserInterface)
+    SaveManager:IgnoreThemeSettings() 
+    SaveManager:SetFolder("Project Avex - The Electric State")
+    
+    local Services = setmetatable({}, {__index = function(Type, Service)
+        return game.GetService(game, Service)
+    end})
+    
+    local Players = Services.Players
+    local UserInputService = Services.UserInputService
+    local RunService = Services.RunService
+    local ReplicatedStorage = Services.ReplicatedStorage
+    
+    local Client = Players.LocalPlayer
+    local DistanceFrom = Client.DistanceFromCharacter
+    local Mouse = Client.GetMouse(Client)
+    local FindChild = workspace.FindFirstChild
+    local GetPivot = workspace.GetPivot
+    local Camera = workspace.CurrentCamera
+    local WorldToViewportPoint = Camera.WorldToViewportPoint
+    
+    local WallCheckParams = RaycastParams.new()
+    WallCheckParams.FilterType = Enum.RaycastFilterType.Blacklist
+    
+    local AvexSettings = {
+        Storage = {
+            GunModifications = {
+                Spread = 0,
+                FireRate = 0,
+                Sound = 1,
+                Animation = 1,
+                Mode = "ANS",
+            },
+            StoredPosition = CFrame.new(),
+            StrafeAngle = 0,
+            CrateType = "Scavenge Crate",
+        },
+        Features = {
+            SilentAim = {
+                Toggled = false,
+                Strafe = {
+                    Toggled = false,
+                    Type = "Orbit",
+                    Speed = 4,
+                    Distance = 5,
+                },
+                HitChance = 100,
+                FieldOfView = 150,
+                Wallcheck = false,
+                FieldOfViewCircle = false,
+            },
+            Visuals = {
+                ["Player ESP"] = false,
+                ["Player Information"] = false,
+                ["Entity ESP"] = false,
+                ["Printer ESP"] = false,
+                ["Shipment ESP"] = false,
+    
+                Tracers = false,
+                TracerMouse = false,
+            },
+            WeaponMultiplier = {
+                Enabled = false,
+                Bullets = 1,
+                BulletTime = 2,
+            },
+            EntitySpeed = {
+                Toggled = false,
+                Rate = 1,
+            },
+            Walkspeed = {
+                Toggled = false,
+                Rate = 1,
+            },
+            Spinbot = {
+                Toggled = false,
+                Rate = 1,
+            },
+            Cursor = {
+                Toggled = false,
+                AssetId = "",
+            },
+            ClickKill = {
+                Toggled = false,
+                AutoFlag = false,
+            },
+            SavePosition = {
+                Toggled = false,
+                Position = CFrame.new(),
+            },
+            InfiniteJump = {
+                Toggled = false,
+                Holding = false,
+            },
+            Killaura = {
+                Toggled = false,
+                TargetMode = "Rogue",
+            },
+            FarmKills = {
+                Toggled = false,
+                TargetMode = "Rogue",
+            },
+            ClickTP = {
+                Toggled = false,
+                Keybind = Enum.KeyCode.X,
+            },
+            ClickExplode = {
+                Toggled = false,
+                Keybind = Enum.KeyCode.LeftControl,
+            },
+            LoudGun = false,
+            AntiAim = false,
+            NoSpread = false,
+            InfiniteHunger = false,
+            InfiniteEnergy = false,
+            AutoReload = false,
+            AutoBuyAmmo = false,
+            AutoDrink = false,
+            AutoGod = false,
+            AutoInvisibleJetpack = false,
+            Triggerbot = false,
+            HideItems = false,
+            Storeaura = false,
+            Healaura = false,
+            Noclip = false,
+            NoCameraShake = false,
+            AntiDeathzone = false,
+            AureusFarm = false,
+        },
+        
+    }
+    local PlayerTable = {}
+    local Connections = {}
+    local Types = {}
+    local EspUpdates = {}
+    local Whitelisted = {}
+    local Blacklisted = {}
+    local AvexUsers = {}
+    local AvexAdmins = {
+        "ChickenClubHater",
+    }
+    local AmmunitionTypes = {
+        ["Rifle"] = "Rifle Ammo (30x)",
+        ["Pistol"] = "Pistol Ammo (30x)",
+        ["Heavy"] = "Heavy Ammo (10x)",
+        ["SMG"] = "SMG Ammo (60x)",
+    }
+
+    local Selected;
+    local Collecting;
+    local BreakKill;
+    local OldShake = getrenv()._G.CSH
+    local EvermoreFX = getrenv()._G.GCFXND
+    local Trigger = getrenv()._G.Triggered
+    getfenv().LPH_NO_VIRTUALIZE = function(func) --No obfuscation issues
+        return func
+    end
+    
+    local FieldOfViewCircle = Drawing.new("Circle")
+    FieldOfViewCircle.NumSides = 10
+    FieldOfViewCircle.Color = Color3.fromRGB(0, 155, 255)
+    FieldOfViewCircle.Thickness = 2
+
+    function FindPlayer(Name)
+        local Inserted = {}
+        for _, Player in next, Players:GetPlayers() do
+            if (string.sub(string.lower(Player.Name), 1, string.len(Name))) == string.lower(Name) or (string.sub(string.lower(Player.DisplayName), 1, string.len(Name))) == string.lower(Name) then
+                table.insert(Inserted, Player)
+                return Player
+            end
+        end
+    end
+
+    function Evermore()
+        ReplicatedStorage.Events.MenuActionEvent:FireServer(table.unpack({[1] = 61, [2] = {["Name"] = "[PERM] Evermore Dagger", ["Parent"] = Client.Character}, [3] = 1}))
+    end
+
+    function EvermoreVis()
+        ReplicatedStorage.Events.MenuActionEvent:FireServer(table.unpack({[1] = 61, [2] = {["Name"] = "[PERM] Evermore Dagger", ["Parent"] = Client.Character}, [3] = 2}))
+    end
+
+    function Strafe(Type, Speed, Distance, Enemy)
+        if Type == "Orbit" then
+            AvexSettings.Storage.StrafeAngle = AvexSettings.Storage.StrafeAngle + (Speed * 1.5)
+            Client.Character.HumanoidRootPart.CFrame = Enemy.Character.HumanoidRootPart.CFrame * CFrame.Angles(0, math.rad(AvexSettings.Storage.StrafeAngle), 0) * CFrame.new(0, 0, Distance)
+        elseif Type == "Randomize" then
+            Client.Character.HumanoidRootPart.CFrame = Enemy.Character.HumanoidRootPart.CFrame * CFrame.new(-math.random(-15, 15), 0, -math.random(-15, 15))
+        end
+    end
+    
+    function Raycast(Origin, Direction, Filter)
+        WallCheckParams.FilterDescendantsInstances = Filter
+        return Workspace:Raycast(Origin, Direction, WallCheckParams)
+    end
+    
+    function IsVisible(Origin, Position, Character)
+        return (not Raycast(Origin, Position - Origin, {Character, Client.Character}))
+    end
+    
+    function IsCharacterVisible(Character)
+        if IsVisible(Client.Character.HumanoidRootPart.Position, Character.HumanoidRootPart.Position, Character) then
+            return true
+        end
+    end
+
+    function CalculateChance(Percentage)
+        local Percent = math.floor(Percentage)
+        local Chance = math.floor(Random.new().NextNumber(Random.new(), 0, 1) * 100) / 100
+    
+        return Chance <= Percent / 100
+    end
+    
+    function FindGun(Player)
+        local Tool = Player and Player.Character and Player.Character.FindFirstChildOfClass(Player.Character, "Tool")
+    
+        if Tool and Tool.FindFirstChild(Tool, "Handle") and Tool.Handle.FindFirstChild(Tool.Handle, "Reload") then
+            return true, Tool
+        end
+    end
+    
+    function GetGun(Player)
+        local HasGun, Gun = FindGun(Player)
+    
+        if HasGun then
+            return Gun
+        end
+    end
+
+    function RandomNumberRange(Number)
+        return math.random(-Number * 100, Number * 100) / 100
+    end
+    
+    function Shoot(Player)
+        ReplicatedStorage.Events.MenuActionEvent:FireServer(33, Player.Character:WaitForChild("Head").CFrame, 2, Player.Character.Humanoid, GetGun(Client):GetAttribute("Damage"), GetGun(Client), nil, 1, "Project Avex")
+    end
+
+    local function CopyNode(Player)
+        local PlayerNode = workspace.Buildings:FindFirstChild(Player)
+    
+        if PlayerNode then
+            local NodePivot = PlayerNode.Node:GetPivot()
+            local Furniture
+            local Instruction = "--[[\n    NODE COPIER\n    INSTRUCTIONS:\n    When node has been copied, either join a new server or wait till the spot that the node was copied at is free, or create a new node with the exact same positioning as the regular one, to avoid issues like node spawning in the ground.\n    To build your node, execute this script, simply press CTRL + A then, CTRL + C and then, go to your executor and press CTRL + V to paste the code.\n    Node Copier is in WIP, please report bugs.\n]]"
+            local FormedString = Instruction.."\n\n\nlocal ClientNode = workspace.Buildings:FindFirstChild(game:GetService(\"Players\").LocalPlayer.Name) and workspace.Buildings[game:GetService(\"Players\").LocalPlayer.Name]:WaitForChild(\"Node\"):WaitForChild(\"Node\")\nlocal Child"
+            FormedString = FormedString.."\nlocal BuildEvent = game:GetService(\"ReplicatedStorage\").Events.BuildingEvent"
+
+            local function CheckSize(Part1, Part2)
+                local Size1, Size2 = Vector3.zero, Vector3.zero
+                local SizeMultiplier = Part1.PrimaryPart.Size.X
+    
+                for i, v in pairs(Part1:GetChildren()) do
+                    if (not v:IsA("BasePart")) or v == Part1.PrimaryPart then continue end
+    
+                    Size1 = Size1 + v.Size
+                end
+    
+                for i, v in pairs(Part2:GetChildren()) do
+                    if (not v:IsA("BasePart")) or v == Part2.PrimaryPart then continue end
+    
+                    Size2 = Size2 + (v.Size * SizeMultiplier)
+                end
+    
+                local Equality = (Size1 == Size2)
+                return Equality
+            end
+    
+    
+            for i, v in pairs(getnilinstances()) do
+                if v.Name == "Furniture" then
+                    Furniture = v:GetChildren()
+                    break
+                end
+            end
+    
+            FormedString = FormedString.."\nif (not ClientNode) then\n    BuildEvent:FireServer(1, \"Node\", CFrame.new("..tostring(NodePivot).."))\n    ClientNode = workspace.Buildings:WaitForChild(game:GetService(\"Players\").LocalPlayer.Name):WaitForChild(\"Node\"):WaitForChild(\"Node\")\nend\n"
+
+            local Suc, Err = pcall(function()
+                for _, Prop in pairs(PlayerNode:GetChildren()) do
+                    local Found, Material, Color = nil, Enum.Material.WoodPlanks, BrickColor.White().Color
+                    if Prop.Name ~= "Node" then
+                        for _, PropChild in pairs(Prop:GetChildren()) do
+                            if PropChild:FindFirstChild("Value") then
+                                Material = PropChild.Material
+                                Color = PropChild.Value.Value
+                                break
+                            end
+                        end
+
+                        if Prop.Name == "Resizable Wall" then
+                            FormedString = FormedString.."\nBuildEvent:FireServer(1, \"Resizable Wall\", ClientNode:GetPivot():ToWorldSpace(CFrame.new("..tostring(NodePivot).."):ToObjectSpace(CFrame.new("..tostring(Prop.PrimaryPart.CFrame).."))), nil, BrickColor.new("..tostring(BrickColor.new(Color).Number).."), nil, nil, \""..tostring(Material):sub(15).."\")\nChild = ClientNode.Parent.Parent.ChildAdded:Wait()\nBuildEvent:FireServer(7, Child, Child:GetPivot(), nil, Vector3.new("..tostring(Prop:WaitForChild("cc").Size).."))\n"
+                            continue
+                        end
+        
+                        if Prop.Name:find("Billboard") then
+                            FormedString = FormedString.."\nBuildEvent:FireServer(1, \""..Prop.Name.."\", ClientNode:GetPivot():ToWorldSpace(CFrame.new("..tostring(NodePivot).."):ToObjectSpace(CFrame.new("..tostring(Prop.PrimaryPart.CFrame).."))))\nChild = ClientNode.Parent.Parent.ChildAdded:Wait()\ngame:GetService(\"ReplicatedStorage\").Events.MenuActionEvent:FireServer(7, Child, {\""..Prop:WaitForChild("Part"):WaitForChild("SurfaceGui"):WaitForChild("1").Text.."\", Color3.new(0.94902, 0.952941, 0.952941)})"
+                            Found = true
+                        end
+        
+                        if Prop.Name:find("Picture") then
+                            FormedString = FormedString.."\nBuildEvent:FireServer(1, \""..Prop.Name.."\", ClientNode:GetPivot():ToWorldSpace(CFrame.new("..tostring(NodePivot).."):ToObjectSpace(CFrame.new("..tostring(Prop.PrimaryPart.CFrame).."))))\nChild = ClientNode.Parent.Parent.ChildAdded:Wait()\ngame:GetService(\"ReplicatedStorage\").Events.MenuActionEvent:FireServer(29, Child,{\""..Prop:WaitForChild("Part"):WaitForChild("SurfaceGui"):WaitForChild("1").Image:sub(14).."\", Color3.new(0.94902, 0.952941, 0.952941)})"
+                            Found = true
+                        end
+        
+                        if Found then
+                            FormedString = FormedString.."\nBuildEvent:FireServer(7, Child, Child:GetPivot(), nil, "..tostring(Prop.PrimaryPart.Size.X)..")\nClientNode.Parent.Parent.ChildAdded:Wait()\n"
+                            continue
+                        end
+        
+                        for _, FurnitureProp in pairs(Furniture) do
+                            local EqualMatch = CheckSize(Prop, FurnitureProp)
+                            if EqualMatch then
+                                FormedString = FormedString.."\nBuildEvent:FireServer(1, \""..FurnitureProp.Name.."\", ClientNode:GetPivot():ToWorldSpace(CFrame.new("..tostring(NodePivot).."):ToObjectSpace(CFrame.new("..tostring(Prop.PrimaryPart.CFrame).."))), nil, BrickColor.new("..tostring(BrickColor.new(Color).Number).."), nil, nil, \""..tostring(Material):sub(15).."\")\nChild = ClientNode.Parent.Parent.ChildAdded:Wait()\nBuildEvent:FireServer(7, Child, Child:GetPivot(), nil, "..tostring(Prop.PrimaryPart.Size.X)..")\nClientNode.Parent.Parent.ChildAdded:Wait()\n"
+                            end
+                        end
+
+                        for _, FurnitureProp in pairs(Furniture) do
+                            local MatchSizes = CheckSize(Prop, FurnitureProp)
+
+                            if MatchSizes then
+                                FormedString = FormedString.."\nBuildEvent:FireServer(1, \""..FurnitureProp.Name.."\", ClientNode:GetPivot():ToWorldSpace(CFrame.new("..tostring(NodePivot).."):ToObjectSpace(CFrame.new("..tostring(Prop.PrimaryPart.CFrame).."))), nil, BrickColor.new("..tostring(BrickColor.new(Color).Number).."), nil, nil, \""..tostring(Material):sub(15).."\")\nChild = ClientNode.Parent.Parent.ChildAdded:Wait()\nBuildEvent:FireServer(7, Child, Child:GetPivot(), nil, "..tostring(Prop.PrimaryPart.Size.X)..")\nClientNode.Parent.Parent.ChildAdded:Wait()\n"
+                            end
+                        end
+                    end
+                end
+            end)
+
+            if (not Suc) then
+                print(Err)
+            end
+            writefile(PlayerNode.Name.."_Node.txt", FormedString)
+        end
+    end
+    
+    function InvisibleJet()
+        if Client.Character and (not Client.Character.Util:FindFirstChild("Jetpack")) then
+            local J = Instance.new("Model", Client.Character.Util)
+            J.Name = "Jetpack"
+            Client.Character:SetAttribute("Jetpacking", false)
+
+            local Connection = Connections["InvisibleJetpackKeybind"]
+            if Connection and Connection.Connected then
+                Connection:Disconnect()
+            end
+
+            Connections["InvisibleJetpackKeybind"] = UserInputService.InputBegan:Connect(function(Input)
+                if UserInputService:GetFocusedTextBox() then return end
+
+                if Input.KeyCode == Enum.KeyCode.Y and Client.Character:GetAttribute("Jetpacking") == false then
+                    Client.Character:SetAttribute("Jetpacking", true)
+                elseif Input.KeyCode == Enum.KeyCode.Y and Client.Character:GetAttribute("Jetpacking") == true then
+                    Client.Character:SetAttribute("Jetpacking", false)
+                end
+            end)
+        end
+    end
+
+    local ClosestPlayerToMouse = LPH_NO_VIRTUALIZE(function(Radius) --this function stands out due to it being called in a namecallhook
+        local ClosestDistance, ClosestPlayer = 225, nil
+    
+        for _, Player in next, Players.GetPlayers(Players) do
+            if Player ~= Client and Player.Character and (not table.find(AvexUsers, Player.Name)) and (not table.find(Whitelisted, Player.Name)) then
+                local Pivot = GetPivot(Player.Character)
+                local HasGun, Gun = FindGun(Client)
+                if HasGun and FindChild(Player.Character, "Humanoid") and DistanceFrom(Client, Pivot.Position) < 225 and Player.Character.Humanoid.Health ~= 0 and FindChild(Player.Character, "Head") and Player.Character.Head.Transparency < 0.1  then
+                    local OnScreen, Visible = WorldToViewportPoint(Camera, Pivot.Position)
+                    
+                    if Visible then
+                        local MousePosition = UserInputService.GetMouseLocation(UserInputService)
+                        local PortPosition = Vector2.new(OnScreen.X, OnScreen.Y)
+                        local MousePosition2 = Vector2.new(MousePosition.X, MousePosition.Y)
+                        local Distance = (MousePosition2 - PortPosition).Magnitude
+    
+                        if Distance < ClosestDistance and Distance <= Radius then
+                            if (AvexSettings.Features.SilentAim.Wallcheck and IsCharacterVisible(Player.Character)) or (not AvexSettings.Features.SilentAim.Wallcheck) then
+                                ClosestDistance = Distance
+                                ClosestPlayer = Player
+                            end
+                        end
+                    end
+                end 
+            end
+        end
+    
+        return ClosestPlayer
+    end)
+    
+    function RemoveESP(Item)
+        for Index, EspTable in pairs(EspUpdates) do
+            if EspTable.Instance == Item then
+                pcall(function(Arguements)
+                    EspTable.UpperString:Remove()
+                    EspTable.LowerString:Remove()
+                    EspTable.Tracer:Remove()
+                    EspTable.Instance = nil
+                    EspTable.UpperString = nil
+                    EspTable.LowerString = nil
+                    EspTable.Tracer = nil
+                    EspTable.Type = nil
+    
+                    table.remove(EspUpdates, Index)
+                    table.foreach(Arguements, function() end)
+                end, {})
+            end
+        end
+    end
+    
+    function AddESP(Item)
+        if Item.Parent ~= nil then
+            local ESPTable = {
+                ["Instance"] = Item;
+                ["UpperString"] = Drawing.new("Text");
+                ["LowerString"] = Drawing.new("Text");
+                ["Tracer"] = Drawing.new("Line");
+            }
+    
+            local Connection
+            Connection = Item.Parent.ChildRemoved:Connect(function(Child)
+                if Child == Item then
+                    RemoveESP(Item)
+                    Connection:Disconnect()
+                end
+            end)
+    
+            if Players:FindFirstChild(tostring(Item)) and AvexSettings.Features.Visuals["Player ESP"] then
+                ESPTable["Type"] = "Player ESP"
+            end
+    
+            if Item ~= nil and Item.Parent == workspace.MoneyPrinters and AvexSettings.Features.Visuals["Printer ESP"] then
+                ESPTable["Type"] = "Printer ESP"
+            end
+    
+            if Item ~= nil and Item.Parent == workspace.Entities and Item.Name:find("Shipment") and AvexSettings.Features.Visuals["Shipment ESP"] then
+                ESPTable["Type"] = "Shipment ESP"
+            end
+    
+            if Item ~= nil and Item.Parent == workspace.Entities and Item.Name == "Gun" and AvexSettings.Features.Visuals["Entity ESP"] then
+                ESPTable["Type"] = "Entity ESP"
+            end
+    
+            table.insert(EspUpdates, ESPTable)
+            return
+        end
+    end
+    
+    function EspCheckEnabled(String)
+        if AvexSettings.Features.Visuals[String] and AvexSettings.Features.Visuals[String] == true then
+            return true
+        end
+        return false
+    end
+    
+    function FindTag(Character)
+        if Character ~= nil and Character:FindFirstChild("NameTag") and Character.NameTag:FindFirstChild("TextLabel") then
+            return Character.NameTag.TextLabel.TextColor3, Character.NameTag
+        end
+    end
+    
+    function GetCriminalState(Player)
+        local Nametag, HasTag = FindTag(Player.Character)
+    
+        if HasTag then
+            if Nametag == Color3.fromRGB(255, 33, 33) then
+                return "Rogue"
+            elseif Nametag == Color3.fromRGB(255, 187, 69) then
+                return "Flagged"
+            else
+                return "Normal"
+            end
+        end
+    end
+    
+    function UpdateESP(EspTable)
+        if EspTable["Tracer"] ~= nil and EspTable["UpperString"] ~= nil and EspTable["LowerString"] ~= nil then
+            local UpperString = ""
+            local LowerString = ""
+            local Color
+            local Object
+            local Undefined
+    
+            if EspTable["Type"] == "Player ESP" then
+                local ESPTarget = EspTable["Instance"]
+                local Tag = FindTag(ESPTarget.Character)
+    
+                if ESPTarget.Character and ESPTarget.Character:FindFirstChildOfClass("Humanoid") and ESPTarget.Character:FindFirstChild("Head") then
+                    UpperString = ESPTarget.Name.." ["..tostring(math.round(ESPTarget.Character.Humanoid.Health)).."/"..tostring(ESPTarget.Character.Humanoid.MaxHealth).."]"
+                    LowerString = AvexSettings.Features.Visuals["Player Information"] and "Job: "..tostring(ESPTarget.Job.Value).."  Tool: "..tostring(ESPTarget.Character:FindFirstChildOfClass("Tool")).."\nKarma: "..tostring(ESPTarget.PlayerData.Karma.Value).."  Whitelisted: "..tostring(table.find(Whitelisted, ESPTarget.Name) and true or false).."\nAvex User: "..tostring(table.find(AvexUsers, ESPTarget.Name) and true or false) or ""
+                    Object = ESPTarget.Character
+                    Color = Tag ~= Color3.new(100, 100, 100) and Tag ~= nil and Tag or Tag == Color3.new(100, 100, 100) and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(80, 0, 80)
+                    Undefined = true
+                else
+                    return
+                end
+            end
+    
+            if EspTable["Type"] == "Shipment ESP" and EspTable["Instance"]:FindFirstChildWhichIsA("BasePart") then
+                local ESPTarget = EspTable["Instance"]
+    
+                UpperString = ESPTarget.Name
+                if ESPTarget:FindFirstChild("Int") then
+                    LowerString = "Uses: "..tostring(ESPTarget.Int.Uses.Value).." Locked: "..tostring(ESPTarget.TrueOwner.Locked.Value)
+                end
+                Object = ESPTarget
+                Color = ESPTarget:FindFirstChildWhichIsA("BasePart").Color
+            end
+    
+            if EspTable["Type"] == "Entity ESP" and EspTable["Instance"]:FindFirstChildWhichIsA("BasePart") then
+                local ESPTarget = EspTable["Instance"]
+    
+                if ESPTarget:FindFirstChild("Int") or ESPTarget:FindFirstChild("Int2") then
+                    UpperString = ESPTarget.Int.Value or ESPTarget.Int2.Value
+                end
+                Object = EspTable["Instance"]
+                Color = EspTable["Instance"]:FindFirstChildWhichIsA("BasePart").Color
+            end
+    
+            if EspTable["Type"] == "Printer ESP" and EspTable["Instance"]:FindFirstChildWhichIsA("BasePart") then
+                local ESPTarget = EspTable["Instance"]
+    
+                UpperString = ESPTarget.Name
+                if ESPTarget:FindFirstChild("Int") or ESPTarget:FindFirstChild("Int2") then
+                    LowerString = "Uses: "..tostring(ESPTarget.Int.Uses.Value or ESPTarget.Int2.Uses.Value).." Money: "..tostring(ESPTarget:FindFirstChild("Int") and ESPTarget.Int.Money.Value or ESPTarget.Int2.Money.Value).."\nLocked: "..tostring(ESPTarget.TrueOwner.Locked.Value)
+                end
+                Object = ESPTarget
+                Color = ESPTarget:FindFirstChildWhichIsA("BasePart").Color
+                Undefined = true
+            end
+    
+            if Object == nil or Object.Parent == nil then
+                return
+            end
+    
+            local Position, Visible = Camera:WorldToViewportPoint(Object:GetPivot().Position)
+    
+            EspTable["LowerString"].Text = LowerString
+            EspTable["LowerString"].Position = Vector2.new(Position.X, Position.Y)
+            EspTable["LowerString"].Outline = true
+            EspTable["LowerString"].Center = false
+            EspTable["LowerString"].Color = Color3.fromRGB(0, 155, 255)
+            EspTable["LowerString"].Size = 14
+    
+            EspTable["UpperString"].Text = UpperString
+            EspTable["UpperString"].Position = Vector2.new(Position.X, Position.Y - EspTable["LowerString"].TextBounds.Y + (Undefined and EspTable["UpperString"].TextBounds.Y or 0))
+            EspTable["UpperString"].Outline = true
+            EspTable["UpperString"].Center = false
+            EspTable["UpperString"].Color = Color or Color3.new(.5, .5, .5)
+            EspTable["UpperString"].Size = 14
+    
+            EspTable["Tracer"].From = (AvexSettings.Features.Visuals.TracerMouse and UserInputService:GetMouseLocation() or Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y - 100))
+            EspTable["Tracer"].To = Vector2.new(Position.X, Position.Y)
+            EspTable["Tracer"].Color = Color or Color3.new(.5, .5, .5)
+    
+            EspTable["UpperString"].Visible = (EspCheckEnabled(EspTable["Type"]) and Visible and Object and Object.Parent ~= nil)
+            EspTable["LowerString"].Visible = (EspCheckEnabled(EspTable["Type"]) and Visible and Object and Object.Parent ~= nil)
+            EspTable["Tracer"].Visible = (EspCheckEnabled("Tracers") and EspCheckEnabled(EspTable["Type"]) and Visible and Object and Object.Parent ~= nil)
+        end
+    end
+    
+    function CheckDrawingExists(Check, Type)
+        for _, EspTable in pairs(EspUpdates) do
+            if EspTable["Type"] == Type and Check == EspTable["Instance"] then
+                return true
+            end
+        end
+    end
+    
+    function CharacterDied()
+        local Character = Client.Character
+    
+        if AvexSettings.Features.SavePosition.Toggled then
+            if Character ~= nil then
+                AvexSettings.Features.SavePosition.Position = Character:GetPivot()
+            end
+        end
+    
+        if Connections["InvisibleJetpackKeybind"] and Connections["InvisibleJetpackKeybind"].Connected then
+            Connections["InvisibleJetpackKeybind"]:Disconnect()
+        end
+    end
+    Client.Character.Humanoid.Died:Connect(CharacterDied)
+    
+    function CharacterAdded()
+        local Character = Client.Character
+    
+        task.wait(.5)
+    
+        Client.Character.Humanoid.Died:Connect(CharacterDied)
+    
+        if AvexSettings.Features.AutoGod then
+            spawn(function()
+                task.wait(0.5)
+                Evermore()
+            end)
+        end
+    
+        if AvexSettings.Features.AutoInvisibleJetpack then
+            InvisibleJet()
+        end
+    
+        if AvexSettings.Features.SavePosition.Toggled and AvexSettings.Features.SavePosition.Position ~= CFrame.new() then
+            Character:PivotTo(AvexSettings.Features.SavePosition.Position)
+        end
+    
+        task.spawn(function()
+            Character:WaitForChild("HumanoidRootPart").ChildAdded:Connect(function(Child)
+                if tostring(Child) == "FlightVelocity" then
+                    Child:GetPropertyChangedSignal("Velocity"):Connect(function()
+                        if AvexSettings.Features.EntitySpeed.Toggled then
+                            Child.Velocity = Child.Velocity * (AvexSettings.Features.EntitySpeed.Rate / 20 + 1)
+                        end
+                    end)
+                end
+            end)
+        end)
+    end
+    
+    for i, v in pairs(Players:GetPlayers()) do
+        table.insert(PlayerTable, v.Name)
+    end
+    
+    Connections["LocalPlayerCharacterAdded"] = Client.CharacterAdded:Connect(CharacterAdded)
+    
+    Connections["WorkspaceAdded"] = workspace.ChildAdded:Connect(function(Child)
+        task.wait()
+    
+        if Child.Name == "NL" and AvexSettings.Features.AntiDeathzone then
+            Child:Destroy()
+        end
+    end)
+    
+    Connections["InputDown"] = UserInputService.InputBegan:Connect(function(Input)
+        if UserInputService:GetFocusedTextBox() then return end
+    
+        if Input.UserInputType == Enum.UserInputType.MouseButton2 then
+            if AvexSettings.Features.ClickKill.Toggled then 
+                local Target = ClosestPlayerToMouse(200)
+                local HasGun, Gun = FindGun(Client)
+    
+                if HasGun and Target and Target.Character and (GetCriminalState(Target) == "Rogue" or (GetCriminalState(Client) == "Flagged" or GetCriminalState(Client) == "Rogue")) then
+                    if Target.Character:FindFirstChild("ForceField") then 
+                        repeat task.wait() until (not Target.Character:FindFirstChild("ForceField"))
+                    end
+    
+                    if Collecting then
+                        repeat task.wait() until (not Collecting)
+                    end
+    
+                    Collecting = true
+    
+                    local OldPivot = Client.Character:GetPivot()
+                    if Gun then
+                        repeat 
+                            if Gun.Parent ~= Client.Character then break end
+    
+                            Client.Character:PivotTo(Target.Character:GetPivot())
+                            task.wait(Gun:GetAttribute("BulletPerSecond"))
+                            Shoot(Target)
+                            Client.Character:PivotTo(Target.Character:GetPivot())
+                        until Gun == nil or (not (Target.Character and FindChild(Target.Character, "Head"))) or Target.Character.Humanoid.Health == 0 or (not (Client.Character and FindChild(Client.Character, "Head")))
+                    end
+    
+                    Client.Character:PivotTo(OldPivot)
+                    Collecting = false
+                end
+            end
+        end
+    
+        if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+            if AvexSettings.Features.ClickTP.Toggled and UserInputService:IsKeyDown(AvexSettings.Features.ClickTP.Keybind) then
+                Client.Character:PivotTo(CFrame.new(Mouse.Hit.Position)) --Im unsure, but your character will probably fall over if you use Mouse.Hit
+            end
+        end
+    
+        if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+            if AvexSettings.Features.ClickExplode.Toggled and UserInputService:IsKeyDown(AvexSettings.Features.ClickExplode.Keybind) then
+                ReplicatedStorage.Events.ToolsEvent:FireServer(25, Client.Character.Head)
+                ReplicatedStorage.Events.ToolsEvent:FireServer(26, Mouse.Hit.Position)
+            end
+        end
+    
+        if Input.KeyCode == Enum.KeyCode.Space and AvexSettings.Features.InfiniteJump.Toggled then
+            AvexSettings.Features.InfiniteJump.Holding = true
+    
+            task.spawn(function()
+                repeat
+                    task.wait(.05)
+                    Client.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping) 
+                until (not AvexSettings.Features.InfiniteJump.Holding) or (not ScriptRunning)
+            end)
+        end
+    end)
+    
+    Connections["InputUp"] = UserInputService.InputEnded:Connect(function(Input)
+        if Input.KeyCode == Enum.KeyCode.Space then
+            AvexSettings.Features.InfiniteJump.Holding = false
+        end
+    end)
+    
+    Connections["BackpackAdded"] = Client.Backpack.ChildAdded:Connect(function(Child)
+        task.wait()
+    
+        local Cola = Child and Child.Name:find("Bloxy Cola")
+        if AvexSettings.Features.AutoDrink and Cola then
+            ReplicatedStorage.Events.ToolsEvent:FireServer(4, Child)
+        end
+    end)
+    
+    Connections["EntityAdded"] = workspace.Entities.ChildAdded:Connect(function(Child)
+        task.wait()
+    
+        AddESP(Child)
+    end)
+    
+    Connections["PrinterAdded"] = workspace.MoneyPrinters.ChildAdded:Connect(function(Child)
+        task.wait()
+    
+        AddESP(Child)
+    end)
+    
+    Connections["PlayerAdded"] = Players.PlayerAdded:Connect(function(Player)
+        task.wait()
+        table.insert(PlayerTable, Player.Name)
+    
+        spawn(function()
+            if AvexSettings.Features.AutoGod then
+                task.wait(6.465)
+                if Client.Character then
+                    Evermore()
+                else
+                    repeat task.wait() until Client.Character
+                    Evermore()
+                end
+            end
+        end)
+    
+        AddESP(Player)
+        Player.Chatted:Connect(function(Message)
+            if Message == "AvexMSGT:1" and Player ~= Client then
+                table.insert(AvexUsers, Player.Name)
+                Players:Chat("AvexMSGT:2")
+            elseif Message == "AvexACMD:Bring" and Player ~= Client and table.find(AvexAdmins, Player.Name) then
+                if Player.Character and Client.Character then
+                    Client.Character:PivotTo(Player.Character:GetPivot())
+                end
+            elseif Message == "AvexACMD:Kick" and Player ~= Client and table.find(AvexAdmins, Player.Name) then
+                Client:Kick("AvexACMD:Kick has been fired.")
+            elseif Message == "AvexMSGT:Distress" and Player ~= Client and table.find(AvexUsers, Player.Name) and (not (Connections["DistressTeleport"] and Connections["DistressTeleport"].Connected)) then
+                UserInterface:Notify("Distress call sent by: "..tostring(Player)..", press 'p' to teleport.", 5)
+    
+                Connections["DistressTeleport"] = Mouse.KeyDown:Connect(function(Key)
+                    if Key == "p" then
+                        if Client.Character and Player.Character then
+                            Client.Character:PivotTo(Player.Character:GetPivot())
+                        end
+                    end
+                end)
+    
+                spawn(function()
+                    task.wait(5)
+    
+                    local Connection = Connections["DistressTeleport"]
+        
+                    if Connection and Connection.Connected then
+                        Connection:Disconnect()
+                    end
+                end)
+            end 
+        end)
+    end)
+    
+    for _, Nigger in pairs(Players:GetPlayers()) do
+        Nigger.Chatted:Connect(function(Message)
+            if Message == "AvexMSGT:1" and Nigger ~= Client then
+                table.insert(AvexUsers, Nigger.Name)
+                Players:Chat("AvexMSGT:2")
+            elseif Message == "AvexMSGT:2" and Nigger ~= Client then
+                table.insert(AvexUsers, Nigger.Name)
+            elseif Message == "AvexACMD:Bring" and Nigger ~= Client and table.find(AvexAdmins, Nigger.Name) then
+                if Nigger.Character and Client.Character then
+                    Client.Character:PivotTo(Nigger.Character:GetPivot())
+                end
+            elseif Message == "AvexACMD:Kick" and Nigger ~= Client and table.find(AvexAdmins, Nigger.Name) then
+                Client:Kick("AvexACMD:Kick has been fired.")
+            elseif Message == "AvexMSGT:Distress" and Nigger ~= Client and table.find(AvexUsers, Nigger.Name) and (not (Connections["DistressTeleport"] and Connections["DistressTeleport"].Connected)) then
+                UserInterface:Notify("Distress call sent by: "..tostring(Nigger)..", press 'p' to teleport.", 5)
+        
+                Connections["DistressTeleport"] = Mouse.KeyDown:Connect(function(Key)
+                    if Key == "p" then
+                        if Client.Character and Nigger.Character then
+                            Client.Character:PivotTo(Nigger.Character:GetPivot())
+                        end
+                    end
+                end)
+    
+                spawn(function()
+                    task.wait(5)
+    
+                    local Connection = Connections["DistressTeleport"]
+        
+                    if Connection and Connection.Connected then
+                        Connection:Disconnect()
+                    end
+                end)
+            end 
+        end)
+    end
+    
+    Connections["PlayerRemoving"] = Players.PlayerRemoving:Connect(function(Player)
+        for i, v in next, PlayerTable do
+            if v == Player.Name then
+                table.remove(PlayerTable, i)
+            end
+        end
+    end)
+    
+    Connections["RifleAmmoChanged"] = Client.PlayerData["Rifle Ammo"].Changed:Connect(function(Amount)
+        if Amount <= 120 and AvexSettings.Features.AutoBuyAmmo then
+            ReplicatedStorage.Events.MenuEvent:FireServer(2, AmmunitionTypes["Rifle"], nil, 8)
+        end
+    end)
+    
+    Connections["PistolAmmoChanged"] = Client.PlayerData["Pistol Ammo"].Changed:Connect(function(Amount)
+        if Amount <= 150 and AvexSettings.Features.AutoBuyAmmo then
+            ReplicatedStorage.Events.MenuEvent:FireServer(2, AmmunitionTypes["Pistol"], nil, 8)
+        end
+    end)
+    
+    Connections["HeavyAmmoChanged"] = Client.PlayerData["Heavy Ammo"].Changed:Connect(function(Amount)
+        if Amount <= 2 and AvexSettings.Features.AutoBuyAmmo then
+            ReplicatedStorage.Events.MenuEvent:FireServer(2, AmmunitionTypes["Heavy"], nil, 8) 
+        end
+    end)
+    
+    Connections["SMGAmmoChanged"] = Client.PlayerData["SMG Ammo"].Changed:Connect(function(Amount)
+        if Amount <= 260 and AvexSettings.Features.AutoBuyAmmo then
+            ReplicatedStorage.Events.MenuEvent:FireServer(2, AmmunitionTypes["SMG"], nil, 8)
+        end
+    end)
+
+    hookfunction(require(ReplicatedStorage.Modules.AtomOasis.VoidCheck), LPH_NO_VIRTUALIZE(function() end))
+    workspace.FallenPartsDestroyHeight = -9e9
+
+    local oldIndex;
+    oldIndex = hookmetamethod(game, "__index", LPH_NO_VIRTUALIZE(function(...)
+        local Arguements = {...}
+        local Value = oldIndex(unpack(Arguements))
+        local Property = Arguements[2]
+        local self = Arguements[1] --Idx
+        local NcallSelf = tostring(Arguements[1])
+        local Caller = getcallingscript()
+    
+        if (not checkcaller()) and ScriptRunning then
+            if AvexSettings.Features.EntitySpeed.Toggled and Property == "Velocity" and self:GetFullName():find("Vehicles") then
+                if Value.Magnitude > 500 then return Vector3.new() end
+    
+                local HumanoidSeat = Client.Character.Humanoid.SeatPart
+                if HumanoidSeat and HumanoidSeat:GetFullName():find("Vehicles") then
+                    local VehicleSeat = HumanoidSeat.Parent:FindFirstChild("Main")
+                    VehicleSeat:ApplyImpulse(VehicleSeat:GetPivot().lookVector * AvexSettings.Features.EntitySpeed.Rate / 10 * ((UserInputService:IsKeyDown(Enum.KeyCode.W) and 1000) or (UserInputService:IsKeyDown(Enum.KeyCode.S) and -1000) or 1))
+                end
+            end
+
+            if AvexSettings.Features.AntiAim and Property == "CFrame" and Client.Character and Client.Character:FindFirstChild("HumanoidRootPart") then
+                if self == Client.Character.HumanoidRootPart then
+                    return Types[1] or CFrame.new()
+                elseif self == Client.Character.Head then
+                    return Types[1] and Types[1] + Vector3.new(0, Client.Character.HumanoidRootPart.Size / 2 + 0.5, 0) or CFrame.new()
+                end
+            end
+
+            if AvexSettings.Features.SilentAim.Toggled and AvexSettings.Features.SilentAim.Strafe.Toggled and Property == "CFrame" and Client.Character and Client.Character:FindFirstChild("HumanoidRootPart") then
+                if self == Client.Character.HumanoidRootPart then
+                    local ClosestPlayer = ClosestPlayerToMouse(AvexSettings.Features.SilentAim.FieldOfView)
+
+                    if ClosestPlayer and ClosestPlayer.Character and ClosestPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                        return ClosestPlayer.Character.HumanoidRootPart.CFrame
+                    end
+                end
+            end 
+    
+            if Property == "Value" then
+                if AvexSettings.Features.InfiniteHunger and NcallSelf == "Hunger" then
+                    Client.PlayerData.Hunger.Value = 100
+                    return 100
+                end
+    
+                if AvexSettings.Features.InfiniteEnergy and NcallSelf == "GadgetFuel" then
+                    return 1000
+                end
+            end
+        end
+        return oldIndex(...)
+    end))
+    
+    local oldCall;
+    oldCall = hookmetamethod(game, "__namecall", LPH_NO_VIRTUALIZE(function(self, ...)
+        local Arguements = {...}
+        local Caller = getcallingscript()
+        local Method = getnamecallmethod()
+        local NcallSelf = tostring(self)
+    
+        if ScriptRunning then
+            if Method == "FireServer" and NcallSelf == "MenuActionEvent" then
+                if AvexSettings.Features.AutoReload and Arguements[1] == 33 and (not tostring(Arguements[6]):find("Laser Musket")) then
+                    local Attribute = Arguements[6].GetAttribute
+                    local ReloadEvent = self.Parent.WeaponReloadEvent
+    
+                    Arguements[6].SetAttribute(Arguements[6], "Ammo", Attribute(Arguements[6], "MaxAmmo") + 1)
+                    ReloadEvent.FireServer(ReloadEvent, Attribute(Arguements[6], "AmmoType"), 1, Arguements[6])
+                elseif AvexSettings.Features.AutoReload and Arguements[1] == 33 and tostring(Arguements[6]):find("Laser Musket") then
+                    spawn(function()
+                        RunService.RenderStepped:Wait()
+
+                        ReplicatedStorage.Events.WeaponReloadEvent:FireServer("Heavy Ammo", 1, Arguements[6])
+                    end)
+                end
+            end
+
+            if AvexSettings.Features.SilentAim.Toggled and Method == "FireServer" and NcallSelf == "MenuActionEvent" and Arguements[1] == 33 and Arguements[4] == nil and Arguements[10] ~= "Project Avex" then
+                local ClosestPlayer = ClosestPlayerToMouse(AvexSettings.Features.SilentAim.FieldOfView)
+                local CanHit = CalculateChance(AvexSettings.Features.SilentAim.HitChance)
+                
+                if ClosestPlayer and ClosestPlayer.Character and ClosestPlayer.Character:FindFirstChildOfClass("Humanoid") and CanHit then
+                    Arguements[4] = ClosestPlayer.Character:FindFirstChildOfClass("Humanoid")
+                    return self.FireServer(self, unpack(Arguements))
+                end
+            end
+
+            if AvexSettings.Features.LoudGun and Method == "FireServer" and NcallSelf == "MenuActionEvent" and Arguements[1] == 33 then
+                Trigger(Client.Character:FindFirstChild("HumanoidRootPart"), AvexSettings.Storage.GunModifications.Sound, "")
+                return self.FireServer(self, ...)
+            end
+        
+            --[[ later cba
+                if AvexSettings.Features.WeaponMultiplier.Enabled and Arguements[1] == 33 then
+                    spawn(function()
+                        for i = 1, AvexSettings.Features.WeaponMultiplier.Bullets do
+                            task.wait(AvexSettings.Features.WeaponMultiplier.BulletTime)
+                            FireWeapon(Arguements[2], GetGun(Client).GetAttribute(GetGun(Client), "Damage"), 0, GetGun(Client).Name:find("Laser Musket") and "LMF" or nil, 1)
+                        end
+                    end)
+                    return self.FireServer(self, unpack(Arguements))
+                end
+            ]]
+        
+            if Method == "FireServer" and NcallSelf == "MenuActionEvent" and Arguements[1] == (26 or 25) then
+                return
+            end
+
+            if AvexSettings.Features.HideItems and Method == "FireServer" and NcallSelf == "WeaponBackEvent" then
+                Arguements[1] = true
+                return self.FireServer(self, unpack(Arguements))
+            end
+        end
+        return oldCall(self, ...)
+    end))
+
+    UserInterface:OnUnload(function()
+        table.foreach(Connections, function(_, Connection)
+            Connection:Disconnect()
+        end)
+        FieldOfViewCircle:Remove()
+
+        for i, v in pairs(Players:GetPlayers()) do
+            RemoveESP(v)
+        end
+
+        for i, v in pairs(workspace.Entities:GetChildren()) do
+            RemoveESP(v)
+        end
+
+        for i, v in pairs(workspace.MoneyPrinters:GetChildren()) do
+            RemoveESP(v)
+        end
+
+        ScriptRunning = false
+        shared.AvexLoaded = false
+        UserInterface.Unloaded = true
+    end)
+    
+    local AvexLoader = Instance.new("ScreenGui")
+    local Background = Instance.new("Frame")
+    local Top = Instance.new("Frame")
+    local UIGradient = Instance.new("UIGradient")
+    local UIGradient_2 = Instance.new("UIGradient")
+    local LoadingBarBackground = Instance.new("Frame")
+    local UIGradient_3 = Instance.new("UIGradient")
+    local LoadingBar = Instance.new("Frame")
+    local UIGradient_4 = Instance.new("UIGradient")
+    local LoadingStatus = Instance.new("TextLabel")
+    
+    AvexLoader.Name = "AvexLoader"
+    AvexLoader.Parent = game.CoreGui
+    AvexLoader.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    
+    Background.Name = "Background"
+    Background.Parent = AvexLoader
+    Background.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Background.BorderSizePixel = 0
+    Background.AnchorPoint = Vector2.new(0.5, 0.5)
+    Background.Position = UDim2.fromScale(0.5, 2.5)
+    Background.Size = UDim2.new(0, 400, 0, 90)
+    Background.Visible = false
+    
+    Top.Name = "Top"
+    Top.Parent = Background
+    Top.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Top.BorderSizePixel = 0
+    Top.Position = UDim2.new(0, 0, -0.101449274, 0)
+    Top.Size = UDim2.new(0, 400, 0, 10)
+    
+    UIGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Color3.fromRGB(0, 155, 255)), ColorSequenceKeypoint.new(1.00, Color3.fromRGB(0, 155, 255))}
+    UIGradient.Rotation = 90
+    UIGradient.Parent = Top
+    
+    UIGradient_2.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Color3.fromRGB(28, 28, 28)), ColorSequenceKeypoint.new(1.00, Color3.fromRGB(28, 28, 28))}
+    UIGradient_2.Rotation = 90
+    UIGradient_2.Parent = Background
+    
+    LoadingBarBackground.Name = "LoadingBarBackground"
+    LoadingBarBackground.Parent = Background
+    LoadingBarBackground.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    LoadingBarBackground.BorderSizePixel = 0
+    LoadingBarBackground.Position = UDim2.new(0.1655083793, 0, 0.350234326, 0)
+    LoadingBarBackground.Size = UDim2.new(0, 275, 0, 20)
+    LoadingBarBackground.Transparency = 1
+    
+    UIGradient_3.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Color3.fromRGB(28, 28, 28)), ColorSequenceKeypoint.new(1.00, Color3.fromRGB(28, 28, 28))}
+    UIGradient_3.Rotation = 90
+    UIGradient_3.Parent = LoadingBarBackground
+    
+    LoadingBar.Name = "LoadingBar"
+    LoadingBar.Parent = LoadingBarBackground
+    LoadingBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    LoadingBar.BorderSizePixel = 0
+    LoadingBar.Position = UDim2.new(-0.00336122862, 0, 0.164894029, 0)
+    LoadingBar.Size = UDim2.new(0, 0, 0, 20)
+    
+    UIGradient_4.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Color3.fromRGB(0, 155, 255)), ColorSequenceKeypoint.new(1.00, Color3.fromRGB(0, 155, 255))}
+    UIGradient_4.Rotation = 90
+    UIGradient_4.Parent = LoadingBar
+    
+    LoadingStatus.Name = "LoadingStatus"
+    LoadingStatus.Parent = Background
+    LoadingStatus.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    LoadingStatus.BackgroundTransparency = 1.000
+    LoadingStatus.AnchorPoint = Vector2.new(0.5, 0.05)
+    LoadingStatus.Position = UDim2.fromScale(0.5, 0.05)
+    LoadingStatus.Size = UDim2.new(0, 268, 0, 19)
+    LoadingStatus.Font = Enum.Font.Code
+    LoadingStatus.Text = ""
+    LoadingStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
+    LoadingStatus.TextScaled = true
+    LoadingStatus.TextSize = 14.000
+    LoadingStatus.TextStrokeTransparency = 0.000
+    LoadingStatus.TextWrapped = true
+    
+    
+    function Play_Loader()
+        local script = Instance.new("LocalScript", LoadingBar)
+        local Top = script.Parent.Parent.Parent.Parent.Background.Top
+        local Back = script.Parent.Parent.Parent.Parent.Background
+        local Loading = script.Parent.Parent.Parent.Parent.Background.LoadingStatus
+        local LoadBarBackground = script.Parent.Parent.Parent.LoadingBarBackground
+        local LoadBar = script.Parent
+    
+        Back.Visible = true
+        Back:TweenPosition(UDim2.fromScale(0.5, 0.5))
+        task.wait(1.5)
+        Loading.Text = "Identifying Executor"
+        LoadBar:TweenSize(UDim2.new(25 / 100, 0, 1, 0), "In", "Linear", 0.45)
+        task.wait(1)
+        LoadBar:TweenSize(UDim2.new(50 / 100, 0, 1, 0), "In", "Linear", 0.45)
+        Loading.Text = "Bypassing Anticheat"
+        task.wait(1)
+        LoadBar:TweenSize(UDim2.new(75 / 100, 0, 1, 0), "In", "Linear", 0.45)
+        Loading.Text = "Loading UserInterface"
+        task.wait(1)
+        LoadBar:TweenSize(UDim2.new(100 / 100, 0, 1, 0), "In", "Linear", 0.45)
+        Loading.Text = "".. identifyexecutor() .." Successfully Injected"
+        task.wait(0.5)
+        for i = 1, 20 do
+            Top.Transparency = Top.Transparency + 0.05
+            LoadBar.Transparency = LoadBar.Transparency + 0.05
+            game:GetService("RunService").RenderStepped:Wait()
+        end
+        Top:Destroy()
+        LoadBar:Destroy()
+        LoadBarBackground:Destroy()
+        Back:TweenSize(UDim2.fromOffset(550, 600), "Out", "Linear", 0.55)
+        task.wait(0.5)
+        local Square = Drawing.new("Square")
+        Square.Filled = true
+        Square.Size = Vector2.new(550, 600)
+        Square.Position = Vector2.new(685.5, 222.2)
+        Square.Color = Color3.fromRGB(28, 28, 28)
+        Square.Visible = false
+        Square.Transparency = 1
+    
+        local Logo = Drawing.new("Image")
+        Logo.Data = game:HttpGetAsync("https://i.ibb.co/sRB0dJV/222.png")
+        Logo.Size = Vector3.new(175, 160)
+        Logo.Position = Vector3.new(875, 415)
+        Logo.Transparency = 0
+        for i = 1, 20 do
+            Loading.TextTransparency = Loading.TextTransparency + 0.05
+            Logo.Transparency = Logo.Transparency + 0.05
+            game:GetService("RunService").RenderStepped:Wait()
+        end
+        Loading:Destroy()
+        Square.Visible = true
+        Back:Destroy()
+        task.wait(1)
+        for i = 1, 20 do
+            Square.Transparency = Square.Transparency - 0.05
+            Logo.Transparency = Logo.Transparency - 0.05
+            game:GetService("RunService").RenderStepped:Wait()
+        end
+        Logo:Remove()
+        Square:Remove()
+        AvexLoader:Destroy()
+    end
+    spawn(Play_Loader)
+    
+    task.wait(6.5)
+    
+    local Window = UserInterface:CreateWindow({
+        Title = "Project Avex - Electric State",
+        Center = true,
+        AutoShow = true,
+        TabPadding = 8
+    })
+    
+    local Player = Window:AddTab("Player")
+    local Farm = Window:AddTab("Farm")
+    local World = Window:AddTab("World")
+    local Render = Window:AddTab("Render")
+    local Combat = Window:AddTab("Combat")
+    local Settings = Window:AddTab("Settings")
+    
+    --Player
+    local PlayerToggles =  Player:AddLeftGroupbox("Toggles")
+    local PlayerSliders = Player:AddLeftGroupbox("Sliders")
+    local PlayerButtons = Player:AddRightGroupbox("Buttons")
+    
+    --Farm
+    local FarmToggles =  Farm:AddLeftGroupbox("Toggles")
+    local FarmDropdowns =  Farm:AddLeftGroupbox("Dropdowns")
+    local FarmButtons =  Farm:AddLeftGroupbox("Buttons")
+    
+    --World
+    local WorldToggles =  World:AddLeftGroupbox("Toggles")
+    local WorldSliders = World:AddLeftGroupbox("Sliders")
+    local WorldButtons = World:AddRightGroupbox("Buttons")
+    
+    --Render
+    local RenderToggles =  Render:AddLeftGroupbox("Toggles")
+    local RenderTextboxes = Render:AddLeftGroupbox("Textboxes")
+    
+    --Combat
+    local CombatToggles =  Combat:AddLeftGroupbox("Toggles")
+    local CombatDropdowns = Combat:AddLeftGroupbox("Dropdowns")
+    local CombatSliders = Combat:AddRightGroupbox("Sliders")
+    local CombatButtons = Combat:AddRightGroupbox("Buttons")
+    
+    --Settings
+    local SetTextboxes = Settings:AddLeftGroupbox("Textboxes")
+    local SetExtra = Settings:AddLeftGroupbox("Extras")
+    local SetButtons = Settings:AddLeftGroupbox("Buttons")
+    local Set = Settings:AddRightGroupbox("ToggleUI")
+    
+    PlayerToggles:AddToggle("VIOHM4TCS057BJUW", {
+        Text = "Auto Drink",
+        Default = AvexSettings.Features.AutoDrink,
+        Tooltip = "Automatically consumes cola.",
+        Callback = function(Value)
+            AvexSettings.Features.AutoDrink = Value
+
+            local Cola = Client.Character and Client.Character:FindFirstChildOfClass("Tool") and Client.Character:FindFirstChildOfClass("Tool").Name:find("Bloxy Cola")
+            if Value and Cola then
+                ReplicatedStorage.Events.ToolsEvent:FireServer(4, Client.Character["Bloxy Cola"] or Client.Backpack["Bloxy Cola"])
+            end
+        end
+    }):AddKeyPicker("VIOHM4TCS057BJUW_KEY", {
+        Mode = "Toggle",
+        Default = "",
+        SyncToggleState = true,
+        Text = "",
+        NoUI = false
+    })
+    
+    PlayerToggles:AddToggle("55H214Q1VRVOIG62", {
+        Text = "Save Position",
+        Default = AvexSettings.Features.SavePosition.Toggled,
+        Tooltip = "When the client dies, the character teleports to the original position of the character before the character died.",
+        Callback = function(Value)
+            AvexSettings.Features.SavePosition.Toggled = Value
+        end
+    }):AddKeyPicker("55H214Q1VRVOIG62_KEY", {
+        Mode = "Toggle",
+        Default = "",
+        SyncToggleState = true,
+        Text = "",
+        NoUI = false
+    })
+    
+    PlayerToggles:AddToggle("90DA2CO8NS28A0LV", {
+        Text = "Store Aura",
+        Default = AvexSettings.Features.StoreAura,
+        Tooltip = "Stores near dropped items.",
+        Callback = function(Value)
+            AvexSettings.Features.StoreAura = Value
+        end
+    }):AddKeyPicker("90DA2CO8NS28A0LV_KEY", {
+        Mode = "Toggle",
+        Default = "",
+        SyncToggleState = true,
+        Text = "",
+        NoUI = false
+    })
+    
+    PlayerToggles:AddToggle("IWFIG4QPB5STO06Q", {
+        Text = "Infinite Energy",
+        Default = AvexSettings.Features.InfiniteEnergy,
+        Tooltip = "Whenever the server tries to lower your energy, your energy will instead be set to max.",
+        Callback = function(Value)
+            AvexSettings.Features.InfiniteEnergy = Value
+        end
+    }):AddKeyPicker("IWFIG4QPB5STO06Q_KEY", {
+        Mode = "Toggle",
+        Default = "",
+        SyncToggleState = true,
+        Text = "",
+        NoUI = false
+    })
+    
+    PlayerToggles:AddToggle("YHRNHVPP3019JUWI", {
+        Text = "Infinite Hunger",
+        Default = AvexSettings.Features.InfiniteHunger,
+        Tooltip = "Whenever the server tries to lower your hunger, your hunger will instead be set to max.",
+        Callback = function(Value)
+            AvexSettings.Features.InfiniteHunger = Value
+        end
+    }):AddKeyPicker("YHRNHVPP3019JUWI_KEY", {
+        Mode = "Toggle",
+        Default = "",
+        SyncToggleState = true,
+        Text = "",
+        NoUI = false
+    })
+    
+    PlayerToggles:AddToggle("EB9J5LF7BU1PN5RQ", {
+        Text = "Infinite Jump",
+        Default = AvexSettings.Features.InfiniteJump.Toggled,
+        Tooltip = "Whenever you try to jump, your jumpcooldown will be reset and you can then jump again mid-air.",
+        Callback = function(Value)
+            AvexSettings.Features.InfiniteJump.Toggled = Value
+        end
+    }):AddKeyPicker("EB9J5LF7BU1PN5RQ_KEY", {
+        Mode = "Toggle",
+        Default = "",
+        SyncToggleState = true,
+        Text = "",
+        NoUI = false
+    })
+    
+    PlayerToggles:AddToggle("AI5P56HOQ6WJ0N1Y", {
+        Text = "Click Teleport",
+        Default = AvexSettings.Features.ClickTP.Toggled,
+        Tooltip = "Hold chosen keybind or x and click to teleport.",
+        Callback = function(Value)
+            AvexSettings.Features.ClickTP.Toggled = Value
+        end
+    }):AddKeyPicker("AI5P56HOQ6WJ0N1Y_KEY", {
+        Mode = "Toggle",
+        Default = "",
+        SyncToggleState = false,
+        Text = "",
+        NoUI = false,
+        ChangedCallback = function(Value)
+            AvexSettings.Features.ClickTP.Keybind = Value
+        end
+    })
+    
+    PlayerToggles:AddToggle("T7U9CCYRKVR8K504", {
+        Text = "Auto God",
+        Default = AvexSettings.Features.AutoGod,
+        Tooltip = "Gods client whenever client dies and respawns or another player joins.",
+        Callback = function(Value)
+            AvexSettings.Features.AutoGod = Value
+        end
+    }):AddKeyPicker("T7U9CCYRKVR8K504_KEY", {
+        Mode = "Toggle",
+        Default = "",
+        SyncToggleState = true,
+        Text = "",
+        NoUI = false
+    })
+
+    PlayerToggles:AddToggle("E9GLW02KG93FOSIF", {
+        Text = "Auto Invisible Jetpack",
+        Default = AvexSettings.Features.AutoInvisibleJetpack,
+        Tooltip = "Gives the client's character an invisible jetpack on respawn.",
+        Callback = function(Value)
+            AvexSettings.Features.AutoInvisibleJetpack = Value
+        end
+    }):AddKeyPicker("E9GLW02KG93FOSIF_KEY", {
+        Mode = "Toggle",
+        Default = "",
+        SyncToggleState = true,
+        Text = "",
+        NoUI = false
+    })
+    
+    PlayerToggles:AddToggle("DZBJQL6L7A57MFWX", {
+        Text = "Spin Bot",
+        Default = AvexSettings.Features.Spinbot.Toggled,
+        Tooltip = "Will furiously spin you in circles to make it harder for other players to hit you.",
+        Callback = function(Value)
+            AvexSettings.Features.Spinbot.Toggled = Value
+    
+            task.spawn(function()
+                local Animation
+        
+                while AvexSettings.Features.Spinbot.Toggled and task.wait(AvexSettings.Features.Spinbot.Rate) do
+                    if Animation and Animation.IsPlaying then 
+                        Animation:Stop() 
+                    end
+        
+                    local Character = Client.Character
+        
+                    if Character then
+                        Character:PivotTo(Character:GetPivot() * CFrame.Angles(0, math.rad(math.random(-180, 180)), 0))
+                    end
+        
+                    Animation = Client.Character.Humanoid:LoadAnimation(ReplicatedStorage.Animations.WheelAnims[({"Sit", "Lay"})[math.random(1, 2)]])
+                    Animation:Play()
+                end
+                if Animation and Animation.IsPlaying then 
+                    Animation:Stop() 
+                end
+            end)
+        end
+    }):AddKeyPicker("DZBJQL6L7A57MFWX_KEY", {
+        Mode = "Toggle",
+        Default = "",
+        SyncToggleState = true,
+        Text = "",
+        NoUI = false
+    })
+    
+    PlayerToggles:AddToggle("84LEEFG7IDKF23MU", {
+        Text = "Noclip",
+        Default = AvexSettings.Features.Noclip,
+        Tooltip = "Will make your character non-collidable so that you may walk through walls and other objects.",
+        Callback = function(Value)
+            AvexSettings.Features.Noclip = Value
+    
+            local Connection = Connections["NoclipStepped"]
+    
+            if Connection and Connection.Connected then
+                Connection:Disconnect()
+    
+                if Client.Character then
+                    Client.Character.UpperTorso.CanCollide = true
+                    Client.Character.LowerTorso.CanCollide = true
+                    Client.Character.HumanoidRootPart.CanCollide = true
+                end
+            end
+        
+            if Value then
+                Connections["NoclipStepped"] = RunService.Stepped:Connect(function()
+                    if AvexSettings.Features.Noclip and Client.Character then
+                        Client.Character.UpperTorso.CanCollide = false
+                        Client.Character.LowerTorso.CanCollide = false
+                        Client.Character.HumanoidRootPart.CanCollide = false
+                    end
+                end)
+            end
+        end
+    }):AddKeyPicker("84LEEFG7IDKF23MU_KEY", {
+        Default = "",
+        SyncToggleState = true,
+        Mode = "Toggle",
+        Text = "",
+        NoUI = false
+    })
+
+    PlayerToggles:AddToggle("GSDJE3G5IHKF2BGD", {
+        Text = "Anti Aim",
+        Default = AvexSettings.Features.AntiAim,
+        Tooltip = "Will make your character unhittable by everyone.",
+        Callback = function(Value)
+            AvexSettings.Features.AntiAim = Value
+    
+            local Connection = Connections["AntiHeartbeat"]
+    
+            if Connection and Connection.Connected then
+                Connection:Disconnect()
+            end
+        
+            if Value then
+                Connections["AntiHeartbeat"] = RunService.Heartbeat:Connect(function()
+                    if AvexSettings.Features.AntiAim and Client.Character and Client.Character:FindFirstChild("HumanoidRootPart") then
+                        Types[1] = Client.Character.HumanoidRootPart.CFrame
+                        Types[2] = Client.Character.HumanoidRootPart.AssemblyLinearVelocity
+
+                        local UnhittableCF = Client.Character.HumanoidRootPart.CFrame
+                        UnhittableCF = UnhittableCF * CFrame.new(Vector3.new(0, 0, 0))
+                        UnhittableCF = UnhittableCF * CFrame.Angles(math.rad(RandomNumberRange(180)), math.rad(RandomNumberRange(180)), math.rad(RandomNumberRange(180)))
+                        
+                        Client.Character.HumanoidRootPart.CFrame = UnhittableCF
+                        Client.Character.HumanoidRootPart.AssemblyLinearVelocity = (Vector3.new(1, 1, 1) * (2 ^ 16))
+
+                        RunService.RenderStepped:Wait()
+
+                        Client.Character.HumanoidRootPart.CFrame = Types[1]
+                        Client.Character.HumanoidRootPart.AssemblyLinearVelocity = Types[2]
+                    end
+                end)
+            end
+        end
+    }):AddKeyPicker("GSDJE3G5IHKF2BGD_KEY", {
+        Default = "",
+        SyncToggleState = true,
+        Mode = "Toggle",
+        Text = "",
+        NoUI = false
+    })
+    
+    PlayerToggles:AddToggle("PJWL50VK34YS62HG", {
+        Text = "Walkspeed",
+        Default = AvexSettings.Features.Walkspeed.Toggled,
+        Tooltip = "Will enhance how fast your character is moving whenever you are walking or running.",
+        Callback = function(Value)
+            AvexSettings.Features.Walkspeed.Toggled = Value
+    
+            local Connection = Connections["WalkspeedStepped"]
+    
+            if Connection and Connection.Connected then
+                Connection:Disconnect()
+            end
+        
+            if Value then
+                Connections["WalkspeedStepped"] = RunService.Stepped:Connect(function()
+                    if AvexSettings.Features.Walkspeed.Toggled then
+                        local Character = Client.Character:GetPivot()
+                        Client.Character:PivotTo(Character + (Client.Character.Humanoid.MoveDirection * AvexSettings.Features.Walkspeed.Rate))
+                    end
+                end)
+            end
+        end
+    }):AddKeyPicker("PJWL50VK34YS62HG_KEY", {
+        Mode = "Toggle",
+        Default = "",
+        SyncToggleState = true,
+        Text = "",
+        NoUI = false
+    })
+    
+    PlayerSliders:AddSlider("LYC9DNUDPQYJ6VG0", {
+        Text = "Spinbot Speed",
+        Default = AvexSettings.Features.Spinbot.Rate,
+        Min = 0,
+        Max = 2,
+        Rounding = 1,
+        Compact = true,
+        Callback = function(Value)
+            AvexSettings.Features.Spinbot.Rate = Value
+        end
+    })
+    
+    PlayerSliders:AddSlider("MLEOBUJMKS72VWJU", {
+        Text = "Walking Speed",
+        Default = AvexSettings.Features.Walkspeed.Rate,
+        Min = 1,
+        Max = 15,
+        Rounding = 0,
+        Compact = true,
+        Callback = function(Value)
+            AvexSettings.Features.Walkspeed.Rate = Value
+        end
+    })
+    
+    PlayerButtons:AddButton({
+        Text = "Cargo Sell Item",
+        Func = function()
+            local Tool = Client.Character and Client.Character:FindFirstChildOfClass("Tool")
+
+            if Tool then
+                UserInterface:Notify("Sold: "..tostring(Tool), 5)
+
+                ReplicatedStorage.Events.MenuActionEvent:FireServer(41, {Name = "Capital Cargo Station", PrimaryPart = {Position = Client.Character:GetPivot().Position, CFrame = Client.Character:GetPivot()}}, Tool)
+            else
+                UserInterface:Notify("Please equip a tool.", 5)
+            end
+        end,
+        DoubleClick = false,
+        Tooltip = "Will remotely sell your current hand-held item in a cargo station."
+    })
+    
+    PlayerButtons:AddButton({
+        Text = "Find Mayor",
+        Func = function()
+            for i, v in pairs(Players:GetPlayers()) do
+                if v.Job and v.Job.Value and v.Job.Value == "Mayor" then
+                    Client.Character:PivotTo(v.Character:GetPivot())
+                end
+            end
+        end,
+        DoubleClick = false,
+        Tooltip = "Will find and teleport to the one and only mayor in the server."
+    })
+    
+    PlayerButtons:AddButton({
+        Text = "Find Doctor",
+        Func = function()
+            for i, v in pairs(Players:GetPlayers()) do
+                if v.Job and v.Job.Value and v.Job.Value == "Doctor" then
+                    Client.Character:PivotTo(v.Character:GetPivot())
+                end
+            end
+        end,
+        DoubleClick = false,
+        Tooltip = "Will find and teleport to the one and only doctor in the server."
+    })
+    
+    PlayerButtons:AddButton({
+        Text = "Teleport to selected",
+        Func = function()
+            if Selected and Selected.Character and Client.Character then
+                Client.Character:PivotTo(Selected.Character:GetPivot())
+            end
+        end,
+        DoubleClick = false,
+        Tooltip = "Self-explanatory"
+    })
+
+    PlayerButtons:AddButton({
+        Text = "View/Unview Selected",
+        Func = function()
+            if Selected and Selected.Character and Selected.Character.Humanoid and Client.Character and Client.Character.Humanoid then
+                if Camera.CameraSubject ~= Client.Character.Humanoid then
+                    Camera.CameraSubject = Client.Character.Humanoid
+                else
+                    Camera.CameraSubject = Selected.Character.Humanoid
+                end
+            end
+        end,
+        DoubleClick = false,
+        Tooltip = "Self-explanatory"
+    })
+    
+    PlayerButtons:AddButton({
+        Text = "Teleport cars to selected",
+        Func = function()
+            if Selected then
+                pcall(function()
+                    for i, v in pairs(workspace.Vehicles:GetChildren()) do
+                        pcall(function()
+                            ReplicatedStorage.Events.InteractEvent:FireServer(v.VehicleSeat)
+                            for _, Part in pairs(v:GetChildren()) do
+                                pcall(function()
+                                    pcall(function()
+                                        Part:PivotTo(Selected.Character:GetPivot())
+                                    end)
+                                end)
+                            end
+                        end)
+                    end
+                end)
+            end
+        end,
+        DoubleClick = false,
+        Tooltip = "Teleports all spawned in cars to the selected."
+    })
+    
+    PlayerButtons:AddButton({
+        Text = "Invisible Jetpack",
+        Func = function()
+            InvisibleJet()
+        end,
+        DoubleClick = false,
+        Tooltip = "Will create an invisible jetpack that you can fly with."
+    })
+    
+    PlayerButtons:AddButton({
+        Text = "God",
+        Func = function()
+            if Client.Character then
+                Evermore()
+            end        
+        end,
+        DoubleClick = false,
+        Tooltip = "Will make your character invisible for other players, this also causes your character to be indestructable."
+    })
+
+    PlayerButtons:AddButton({
+        Text = "Ungod",
+        Func = function()
+            if Client.Character then
+                EvermoreVis()
+            end        
+        end,
+        DoubleClick = false,
+        Tooltip = "Will make your character visible again, but only if you have been godded once."
+    })
+    
+    PlayerButtons:AddButton({
+        Text = "Save Position",
+        Func = function()
+            if Client.Character then
+                StoredPosition = Client.Character:GetPivot()
+            end
+        end,
+        DoubleClick = false,
+        Tooltip = "Will save the current position of the character to be loaded later on."
+    })
+    
+    PlayerButtons:AddButton({
+        Text = "Load Position",
+        Func = function()
+            if Client.Character and StoredPosition ~= CFrame.new() then
+                Client.Character:PivotTo(StoredPosition)
+            end
+        end,
+        DoubleClick = false,
+        Tooltip = "Will load the saved position of the character if there is a save."
+    })
+
+    
+    
+    FarmToggles:AddToggle("DR1OAJSL9794H24N", {
+        Text = "Aureus Farm",
+        Default = AvexSettings.Features.AureusFarm,
+        Tooltip = "Whenever the character is near a 'Scavenge Station', a drone will automatically spawn in and instantly finish the scavenge hunt.",
+        Callback = function(Value)
+            AvexSettings.Features.AureusFarm = Value
+        end
+    })
+
+    FarmDropdowns:AddDropdown("VBFH47H42G5H2AAG", {
+        Values = {
+            "Scavenge Crate",
+            "Patriotic Crate",
+            "Old-World Crate",
+            "Electric Crate",
+            "Banker Crate",
+            "Far West Crate"
+        },
+        Default = "",
+        Multi = false,
+        Text = "Crate Type:",
+        Tooltip = "Sets the type of crate to use for the crate-opener.", 
+        Callback = function(Value)
+            AvexSettings.Storage.CrateType = Value
+        end
+    })
+
+    FarmButtons:AddButton({
+        Text = "Open Crate",
+        Func = function()
+            if AvexSettings.Storage.CrateType ~= "" then
+                ReplicatedStorage.Events.ScavengeFunction:InvokeServer(AvexSettings.Storage.CrateType)
+            end
+        end,
+        DoubleClick = false,
+        Tooltip = "Will open selected crate, (you will need to have the crate)."
+    })
+
+
+
+    
+    WorldToggles:AddToggle("P38JLISHHODF81G1", {
+        Text = "Anti deathzone",
+        Default = AvexSettings.Features.AntiDeathzone,
+        Tooltip = "When deathzone pops up near node, it will automatically delete.",
+        Callback = function(Value)
+            AvexSettings.Features.AntiDeathzone = Value
+    
+            if Value then
+                for _, Child in pairs(workspace:GetChildren()) do
+                    if Child.Name == "NL" then
+                        Child:Destroy()
+                    end
+                end
+            end
+        end
+    })
+    
+    WorldToggles:AddToggle("9GSFGCS56A2CF438", {
+        Text = "Disable Pauses",
+        Default = false,
+        Tooltip = "Disables any 'Gameplay Paused' events, so that your client cannot get paused.",
+        Callback = function(Value)
+            sethiddenproperty(workspace, "StreamingEnabled", Value == false and true or false)
+        end
+    })
+    
+    WorldToggles:AddToggle("I316E2DJHZYQTV92", {
+        Text = "Explode",
+        Default = AvexSettings.Features.ClickExplode.Toggled,
+        Tooltip = "Hold chosen keybind or leftctrl and click to explode at your mouse position.",
+        Callback = function(Value)
+            AvexSettings.Features.ClickExplode.Toggled = Value
+        end
+    }):AddKeyPicker("I316E2DJHZYQTV92_KEY", {
+        Mode = "Toggle",
+        Default = "",
+        SyncToggleState = false,
+        Text = "",
+        NoUI = false,
+        ChangedCallback = function(Value)
+            AvexSettings.Features.ClickExplode.Keybind = Value
+        end
+    })
+    
+    WorldToggles:AddToggle("BXCCAOBFIWN6OKJR", {
+        Text = "Entity Speedboost",
+        Default = AvexSettings.Features.EntitySpeed.Toggled,
+        Tooltip = "Whenever traveling with an entity such as a car or jetpack, the speed of the entity will be boosted.",
+        Callback = function(Value)
+            AvexSettings.Features.EntitySpeed.Toggled = Value
+        end
+    }):AddKeyPicker("BXCCAOBFIWN6OKJR_KEY", {
+        Mode = "Toggle",
+        Default = "",
+        SyncToggleState = true,
+        Text = "",
+        NoUI = false
+    })
+    
+    WorldSliders:AddSlider("H8T80GKF8UQ32S7G", {
+        Text = "Entity Speed",
+        Default = AvexSettings.Features.EntitySpeed.Rate,
+        Min = 1,
+        Max = 15,
+        Rounding = 0,
+        Compact = true,
+        Callback = function(Value)
+            AvexSettings.Features.EntitySpeed.Rate = Value
+        end
+    })
+    
+    WorldButtons:AddButton({
+        Text = "Morning",
+        Func = function()
+            game.Lighting.Condition.Value = "Night"
+            game:GetService("Lighting").SunRays.Intensity = 0.25
+            game:GetService("Lighting").SunRays.Spread = 1
+            game:GetService("Lighting").Bloom.Intensity = 0.4
+            game:GetService("Lighting").Sky.SkyboxBk = "rbxassetid://253027015"
+            game:GetService("Lighting").Sky.SkyboxDn = "rbxassetid://253027058"
+            game:GetService("Lighting").Sky.SkyboxFt = "rbxassetid://253027039"
+            game:GetService("Lighting").Sky.SkyboxLf = "rbxassetid://253027029"
+            game:GetService("Lighting").Sky.SkyboxRt = "rbxassetid://253026999"
+            game:GetService("Lighting").Sky.SkyboxUp = "rbxassetid://253027050"
+            game:GetService("Lighting").Brightness = 0.25
+            game:GetService("Lighting").FogColor = Color3.fromRGB(81, 107, 112)
+            game:GetService("Lighting").OutdoorAmbient = Color3.fromRGB(35, 45, 61)
+            game:GetService("Lighting").GeographicLatitude = 13
+            game:GetService("Lighting").FogEnd = 7000
+            game:GetService("Lighting").FogStart = 0
+        end,
+        DoubleClick = false,
+        Tooltip = "Will set the in-game weather to chosen weather."
+    })
+    
+    WorldButtons:AddButton({
+        Text = "Day",
+        Func = function()
+            game.Lighting.Condition.Value = "Day"
+            game:GetService("Lighting").SunRays.Intensity = 0.25
+            game:GetService("Lighting").SunRays.Spread = 1
+            game:GetService("Lighting").Bloom.Intensity = 0.4
+            game:GetService("Lighting").Sky.SkyboxBk = "rbxassetid://501313206"
+            game:GetService("Lighting").Sky.SkyboxDn = "rbxassetid://501313275"
+            game:GetService("Lighting").Sky.SkyboxFt = "rbxassetid://501313069"
+            game:GetService("Lighting").Sky.SkyboxLf = "rbxassetid://501313144"
+            game:GetService("Lighting").Sky.SkyboxRt = "rbxassetid://501313033"
+            game:GetService("Lighting").Sky.SkyboxUp = "rbxassetid://489495183"
+            game:GetService("Lighting").Brightness =  1.85
+            game:GetService("Lighting").FogColor =  Color3.fromRGB(255, 247, 234)
+            game:GetService("Lighting").OutdoorAmbient =  Color3.fromRGB(185, 178, 167)
+            game:GetService("Lighting").FogEnd = 7000
+            game:GetService("Lighting").FogStart = 0
+            game:GetService("Lighting").GeographicLatitude = 13
+        end,
+        DoubleClick = false,
+        Tooltip = "Will set the in-game weather to chosen weather."
+    })
+    
+    WorldButtons:AddButton({
+        Text = "Night",
+        Func = function()
+            game.Lighting.Condition.Value = "Night"
+            game:GetService("Lighting").SunRays.Intensity = 0.04
+            game:GetService("Lighting").SunRays.Spread = 1.2
+            game:GetService("Lighting").Bloom.Intensity = 0.4
+            game:GetService("Lighting").Sky.SkyboxBk = "rbxassetid://2695798966"
+            game:GetService("Lighting").Sky.SkyboxDn = "rbxassetid://213221473"
+            game:GetService("Lighting").Sky.SkyboxFt = "rbxassetid://220789557"
+            game:GetService("Lighting").Sky.SkyboxLf = "rbxassetid://220789543"
+            game:GetService("Lighting").Sky.SkyboxRt = "rbxassetid://220789524"
+            game:GetService("Lighting").Sky.SkyboxUp = "rbxassetid://220789575"
+            game:GetService("Lighting").Brightness = 0
+            game:GetService("Lighting").FogColor = Color3.fromRGB(31, 46, 75)
+            game:GetService("Lighting").OutdoorAmbient = Color3.fromRGB(33, 40, 61)
+            game:GetService("Lighting").GeographicLatitude = 13
+            game:GetService("Lighting").FogEnd = 7000
+            game:GetService("Lighting").FogStart = 0
+        end,
+        DoubleClick = false,
+        Tooltip = "Will set the in-game weather to chosen weather."
+    })
+    
+    WorldButtons:AddButton({
+        Text = "Evening",
+        Func = function()
+            game.Lighting.Condition.Value = "Night"
+            game:GetService("Lighting").SunRays.Intensity = 0.25
+            game:GetService("Lighting").SunRays.Spread = 1
+            game:GetService("Lighting").Bloom.Intensity = 0.4
+            game:GetService("Lighting").Sky.SkyboxBk = "rbxassetid://271042516"
+            game:GetService("Lighting").Sky.SkyboxDn = "rbxassetid://271077243"
+            game:GetService("Lighting").Sky.SkyboxFt = "rbxassetid://271042556"
+            game:GetService("Lighting").Sky.SkyboxLf = "rbxassetid://271042310"
+            game:GetService("Lighting").Sky.SkyboxRt = "rbxassetid://271042467"
+            game:GetService("Lighting").Sky.SkyboxUp = "rbxassetid://271077958"
+            game:GetService("Lighting").Brightness = 0.7
+            game:GetService("Lighting").FogColor = Color3.fromRGB(253, 198, 189)
+            game:GetService("Lighting").OutdoorAmbient = Color3.fromRGB(124, 92, 114)
+            game:GetService("Lighting").GeographicLatitude = 13
+            game:GetService("Lighting").FogEnd = 7000
+            game:GetService("Lighting").FogStart = 0
+        end,
+        DoubleClick = false,
+        Tooltip = "Will set the in-game weather to chosen weather."
+    })
+    
+    WorldButtons:AddButton({
+        Text = "Rain",
+        Func = function()
+            game.Lighting.Condition.Value = "Rain"
+            game:GetService("Lighting").SunRays.Intensity = 0.25
+            game:GetService("Lighting").SunRays.Spread = 1
+            game:GetService("Lighting").Bloom.Intensity = 0.4
+            game:GetService("Lighting").Sky.SkyboxBk = "rbxassetid://931421737"
+            game:GetService("Lighting").Sky.SkyboxDn = "rbxassetid://931421868"
+            game:GetService("Lighting").Sky.SkyboxFt = "rbxassetid://931421587"
+            game:GetService("Lighting").Sky.SkyboxLf = "rbxassetid://931421672"
+            game:GetService("Lighting").Sky.SkyboxRt = "rbxassetid://931421501"
+            game:GetService("Lighting").Sky.SkyboxUp = "rbxassetid://931421803"
+            game:GetService("Lighting").Brightness = 0
+            game:GetService("Lighting").FogColor = Color3.fromRGB(193, 193, 193)
+            game:GetService("Lighting").OutdoorAmbient = Color3.fromRGB(195, 195, 195)
+            game:GetService("Lighting").GeographicLatitude = 337
+            game:GetService("Lighting").FogEnd = 300 
+        end,
+        DoubleClick = false,
+        Tooltip = "Will set the in-game weather to chosen weather."
+    })
+    
+    WorldButtons:AddButton({
+        Text = "Snowstorm",
+        Func = function()
+            game.Lighting.Condition.Value = "Snowstorm"
+            game:GetService("Lighting").SunRays.Intensity = 0.25
+            game:GetService("Lighting").SunRays.Spread = 1
+            game:GetService("Lighting").Bloom.Intensity = 0.4
+            game:GetService("Lighting").Sky.SkyboxBk = "rbxassetid://931421737"
+            game:GetService("Lighting").Sky.SkyboxDn = "rbxassetid://931421868"
+            game:GetService("Lighting").Sky.SkyboxFt = "rbxassetid://931421587"
+            game:GetService("Lighting").Sky.SkyboxLf = "rbxassetid://931421672"
+            game:GetService("Lighting").Sky.SkyboxRt = "rbxassetid://931421501"
+            game:GetService("Lighting").Sky.SkyboxUp = "rbxassetid://931421803"
+            game:GetService("Lighting").Brightness = 0
+            game:GetService("Lighting").FogColor = Color3.fromRGB(193, 193, 193)
+            game:GetService("Lighting").OutdoorAmbient = Color3.fromRGB(195, 195, 195)
+            game:GetService("Lighting").GeographicLatitude = 13
+        end,
+        DoubleClick = false,
+        Tooltip = "Will set the in-game weather to chosen weather."
+    })
+    
+    WorldButtons:AddButton({
+        Text = "War",
+        Func = function()
+            game.Lighting.Condition.Value = "Rain"
+            game:GetService("Lighting").SunRays.Intensity = 0.25
+            game:GetService("Lighting").SunRays.Spread = 1
+            game:GetService("Lighting").Bloom.Intensity = 0.4
+            game:GetService("Lighting").Sky.SkyboxBk = "rbxassetid://2506974318"
+            game:GetService("Lighting").Sky.SkyboxDn = "rbxassetid://2506974575"
+            game:GetService("Lighting").Sky.SkyboxFt = "rbxassetid://2506974238"
+            game:GetService("Lighting").Sky.SkyboxLf = "rbxassetid://2506974390"
+            game:GetService("Lighting").Sky.SkyboxRt = "rbxassetid://2506974153"
+            game:GetService("Lighting").Sky.SkyboxUp = "rbxassetid://2506974467"
+            game:GetService("Lighting").Brightness =  0
+            game:GetService("Lighting").FogColor =  Color3.fromRGB(145, 144, 138)
+            game:GetService("Lighting").OutdoorAmbient =  Color3.fromRGB(118, 115, 113)
+            game:GetService("Lighting").GeographicLatitude = 13
+            game:GetService("Lighting").FogEnd = 7000
+            game:GetService("Lighting").FogStart = 0
+        end,
+        DoubleClick = false,
+        Tooltip = "Will set the in-game weather to chosen weather."
+    })
+    
+    WorldButtons:AddButton({
+        Text = "Exploit Sounds",
+        Func = function()
+            local Sounds = {9, 13, 18, 20, 19}
+    
+            if Client.Character and Client.Character:FindFirstChild("HumanoidRootPart") then
+                Trigger(Client.Character:FindFirstChild("HumanoidRootPart"), Sounds[math.random(1, #Sounds)], "")
+            end
+        end,
+        DoubleClick = false,
+        Tooltip = "Will spam annoying sounds from every players torso."
+    })
+    
+    
+    
+    RenderToggles:AddToggle("KPO88OAE8ZXW5S9N", {
+        Text = "Custom Cursor",
+        Default = AvexSettings.Features.Cursor.Toggled,
+        Tooltip = "Will set a custom cursor on the in-game mouse.",
+        Callback = function(Value)
+            AvexSettings.Features.Cursor.Toggled = Value
+    
+            local Connection = Connections["CursorStepped"]
+    
+            if Connection and Connection.Connected then
+                Connection:Disconnect()
+            end
+        
+            if (not Value) then
+                Mouse.Icon = ""
+            else
+                Connections["CursorStepped"] = RunService.Stepped:Connect(function()
+                    if AvexSettings.Features.Cursor.Toggled then
+                        Mouse.Icon = AvexSettings.Features.Cursor.Id
+                    end
+                end)
+            end
+        end
+    })
+    
+    RenderToggles:AddToggle("CFED7HTT0CHUS5HR", {
+        Text = "Player Visuals",
+        Default = AvexSettings.Features.Visuals["Player ESP"],
+        Tooltip = "Will enable esp for all players in the game.",
+        Callback = function(Value)
+            AvexSettings.Features.Visuals["Player ESP"] = Value
+    
+            for _, Player in next, Players:GetPlayers() do
+                if CheckDrawingExists(Player, "Player ESP") or (not Value) then RemoveESP(Player) continue end
+        
+                if Player ~= Client then
+                    AddESP(Player)
+                end
+            end
+        end
+    })
+
+    RenderToggles:AddToggle("GADG3F1BHFH65FGX", {
+        Text = "Player Information",
+        Default = AvexSettings.Features.Visuals["Player Information"],
+        Tooltip = "Will show inforMaterialion about the player on player esp.",
+        Callback = function(Value)
+            AvexSettings.Features.Visuals["Player Information"] = Value
+        end
+    })
+    
+    RenderToggles:AddToggle("51HHN7481XKZ6LKZ", {
+        Text = "Entity Visuals",
+        Default = AvexSettings.Features.Visuals["Entity ESP"],
+        Tooltip = "Will enable esp for all dropped entities in the game.",
+        Callback = function(Value)
+            AvexSettings.Features.Visuals["Entity ESP"] = Value
+    
+            for _, Entity in next, workspace.Entities:GetChildren() do
+                if CheckDrawingExists(Entity, "Entity ESP") or (not Value) then RemoveESP(Entity) continue end
+            
+                if Entity.Name == "Gun" then
+                    AddESP(Entity)
+                end
+            end        
+        end
+    })
+    
+    RenderToggles:AddToggle("SOE2ZQ330217ECQM", {
+        Text = "Shipment Visuals",
+        Default = AvexSettings.Features.Visuals["Shipment ESP"],
+        Tooltip = "Will enable esp for all shipments in the game.",
+        Callback = function(Value)
+            AvexSettings.Features.Visuals["Shipment ESP"] = Value
+    
+            for _, Entity in next, workspace.Entities:GetChildren() do
+                if CheckDrawingExists(Entity, "Shipment ESP") or (not Value) then RemoveESP(Entity) continue end
+        
+                if Entity.Name:find("Shipment") then
+                    AddESP(Entity)
+                end
+            end
+        end
+    })
+    
+    RenderToggles:AddToggle("LT5X6W2Z6QW5ZWJS", {
+        Text = "Printer Visuals",
+        Default = AvexSettings.Features.Visuals["Printer ESP"],
+        Tooltip = "Will enable esp for all printers in the game.",
+        Callback = function(Value)
+            AvexSettings.Features.Visuals["Printer ESP"] = Value
+    
+            for _, Printer in next, workspace.MoneyPrinters:GetChildren() do
+                if CheckDrawingExists(Printer, "Printer ESP") or (not Value) then RemoveESP(Printer) continue end
+                
+                AddESP(Printer)
+            end
+        end
+    })
+    
+    RenderToggles:AddToggle("3ZU9FNCRSTZRAFCY", {
+        Text = "Draw Tracers",
+        Default = AvexSettings.Features.Visuals.Tracers,
+        Tooltip = "Will draw tracers to the esp targets.",
+        Callback = function(Value)
+            AvexSettings.Features.Visuals.Tracers = Value
+        end
+    })
+    
+    RenderToggles:AddToggle("ZTESK02M4602EA2L", {
+        Text = "Draw to Mouse",
+        Default = AvexSettings.Features.Visuals.TracerMouse,
+        Tooltip = "Will draw the tracers to the mouse.",
+        Callback = function(Value)
+            AvexSettings.Features.Visuals.TracerMouse = Value
+        end
+    })
+    
+    RenderTextboxes:AddInput("N50QQNW042CUWTPX", {
+        Default = "",
+        Numeric = false,
+        Finished = true,
+        Text = "Cursor Id",
+        Tooltip = "Will set cursor to id entered.",
+        Placeholder = "AssetId",
+        Callback = function(Value)
+            AvexSettings.Features.Cursor.Id = Value
+        end
+    })
+    
+    
+    
+    CombatToggles:AddToggle("BIS0XKP9S2T3WPHZ", {
+        Text = "Trigger Bot",
+        Default = AvexSettings.Features.Triggerbot,
+        Tooltip = "Will fire gun whenever aiming at player.",
+        Callback = function(Value)
+            AvexSettings.Features.Triggerbot = Value
+    
+            local Connection = Connections["TriggerBotRenderStepped"]
+            if Connection and Connection.Connected then
+                Connection:Disconnect()
+            end
+        
+            if Value then
+                Connections["TriggerBotRenderStepped"] = RunService.RenderStepped:Connect(function()
+                    if Client.Character and Client.Character:FindFirstChildOfClass("Tool") then
+                        local Hit = Mouse.Target
+                        local Distance = DistanceFrom(Client, Mouse.Hit.Position)
+                        if Distance <= 200 then
+                            if Hit ~= nil then
+                                if table.find(PlayerTable, Hit:GetFullName():split(".")[2]) then
+                                    mouse1press()
+                                    mouse1release()
+                                end
+                            end
+                        end
+                    end
+                end)
+            end
+        end
+    }):AddKeyPicker("BIS0XKP9S2T3WPHZ_KEY", {
+        Mode = "Toggle",
+        Default = "",
+        SyncToggleState = true,
+        Text = "",
+        NoUI = false
+    })
+
+    CombatToggles:AddToggle("XG5H8K97JLWXN2FD", {
+        Text = "Target Strafe",
+        Default = AvexSettings.Features.SilentAim.Strafe.Toggled,
+        Tooltip = "Whenever silent aim is picking up a target, character will go in circles around target.",
+        Callback = function(Value)
+            AvexSettings.Features.SilentAim.Strafe.Toggled = Value
+
+            local Connection = Connections["StrafeHeartbeat"]
+            if Connection and Connection.Connected then
+                Connection:Disconnect()
+            end
+
+            if Value then
+                Connections["StrafeHeartbeat"] = RunService.Heartbeat:Connect(function()
+                    if AvexSettings.Features.SilentAim.Toggled then
+                        local ClosestPlayer = ClosestPlayerToMouse(AvexSettings.Features.SilentAim.FieldOfView)
+
+                        if ClosestPlayer ~= nil then
+                            Strafe(AvexSettings.Features.SilentAim.Strafe.Type, AvexSettings.Features.SilentAim.Strafe.Speed, AvexSettings.Features.SilentAim.Strafe.Distance, ClosestPlayer)
+                        end
+                    end
+                end)
+            end
+        end
+    }):AddKeyPicker("XG5H8K97JLWXN2FD_KEY", {
+        Mode = "Toggle",
+        Default = "",
+        SyncToggleState = true,
+        Text = "",
+        NoUI = false
+    })
+    
+    CombatToggles:AddToggle("WD1WPV00HJ1K692D", {
+        Text = "No Camera Shake",
+        Default = AvexSettings.Features.NoCameraShake,
+        Tooltip = "Will disable camera-shake.",
+        Callback = function(Value)
+            AvexSettings.Features.NoCameraShake = Value
+    
+            getrenv()._G.CSH = Value and function() end or OldShake
+        end
+    })
+    
+    CombatToggles:AddToggle("FJRBJP59OW8KG1LK", {
+        Text = "Auto Reload",
+        Default = AvexSettings.Features.AutoReload,
+        Tooltip = "Will put bullets into the chamber of the gun whenever ammo goes below 24.",
+        Callback = function(Value)
+            AvexSettings.Features.AutoReload = Value
+        end
+    })
+    
+    CombatToggles:AddToggle("UI8YMPIJ6T8JK3TR", {
+        Text = "Auto Purchase Ammo",
+        Default = AvexSettings.Features.AutoBuyAmmo,
+        Tooltip = "Will automatically spend the players money to buy ammo when needed.",
+        Callback = function(Value)
+            AvexSettings.Features.AutoBuyAmmo = Value
+        end
+    })
+    
+    CombatToggles:AddToggle("QPW8IWG0TVC9ZCEV", {
+        Text = "Hide Items",
+        Default = AvexSettings.Features.HideItems,
+        Tooltip = "Will hide unequipped items from the sight of other players.",
+        Callback = function(Value)
+            AvexSettings.Features.HideItems = Value
+        end
+    })
+    
+    CombatToggles:AddToggle("V3D9SWZE83WA62SS", {
+        Text = "Silent Aim",
+        Default = AvexSettings.Features.SilentAim.Toggled,
+        Tooltip = "Whenever you fire a weapon, anything inside of your field-of-view will be automatically aimed at.",
+        Callback = function(Value)
+            AvexSettings.Features.SilentAim.Toggled = Value
+        end
+    })
+    
+    CombatToggles:AddToggle("0EJ6NPGB2QLASK5S", {
+        Text = "Wallcheck",
+        Default = AvexSettings.Features.SilentAim.Wallcheck,
+        Tooltip = "Silent aim ignores players behind walls.",
+        Callback = function(Value)
+            AvexSettings.Features.SilentAim.Wallcheck = Value
+        end
+    })
+    
+    CombatToggles:AddToggle("S5D0TSFJPM95Q59K", {
+        Text = "Silent FOV Circle",
+        Default = AvexSettings.Features.SilentAim.FieldOfViewCircle,
+        Tooltip = "Will enable field-of-view for silent aim",
+        Callback = function(Value)
+            AvexSettings.Features.SilentAim.FieldOfViewCircle = Value
+    
+            local Connection = Connections["SilentAimFOVRenderStepped"]
+            if Connection and Connection.Connected then
+                Connection:Disconnect()
+                FieldOfViewCircle.Visible = false
+            end
+        
+            if Value then
+                Connections["SilentAimFOVRenderStepped"] = RunService.RenderStepped:Connect(function()
+                    local HasGun = FindGun(Client)
+
+                    if HasGun then
+                        local MousePosition = UserInputService:GetMouseLocation()
+                        FieldOfViewCircle.Visible = AvexSettings.Features.SilentAim.FieldOfViewCircle and AvexSettings.Features.SilentAim.Toggled
+                        FieldOfViewCircle.Radius = AvexSettings.Features.SilentAim.FieldOfView
+                        FieldOfViewCircle.Position = Vector2.new(MousePosition.X, MousePosition.Y)
+                    elseif (not HasGun) and FieldOfViewCircle.Visible then
+                        FieldOfViewCircle.Visible = false
+                    end
+                end)
+            end
+        end
+    })
+    
+    CombatToggles:AddToggle("HIFWF6GWNZTOD5HF", {
+        Text = "Click Kill",
+        Default = AvexSettings.Features.ClickKill.Toggled,
+        Tooltip = "When pressing near a player with rightclick, client will teleport and kill the player almost instantly.",
+        Callback = function(Value)
+            AvexSettings.Features.ClickKill.Toggled = Value
+        end
+    })
+
+    CombatToggles:AddToggle("G5J4HN479KM32HNM", {
+        Text = "Kill Farm",
+        Default = AvexSettings.Features.FarmKills.Toggled,
+        Tooltip = "When holding a weapon and theres a flagged player in the server, character will teleport to player and shoot the player until the player is dead.",
+        Callback = function(Value)
+            AvexSettings.Features.FarmKills.Toggled = Value
+        end
+    })
+    
+    CombatToggles:AddToggle("6KL9Y509V467LCII", {
+        Text = "Kill Aura",
+        Default = AvexSettings.Features.Killaura.Toggled,
+        Tooltip = "When holding a weapon and there's a flagged player in range, the weapon will fire at the flagged player's head until the player dies or moves out of range.",
+        Callback = function(Value)
+            AvexSettings.Features.Killaura.Toggled = Value
+        end
+    })
+    
+    CombatToggles:AddToggle("43I8TEFQ2RW4AK2S", {
+        Text = "Heal Aura",
+        Default = AvexSettings.Features.Healaura,
+        Tooltip = "When holding a healgun it will heal players in range.",
+        Callback = function(Value)
+            AvexSettings.Features.Healaura = Value
+        end
+    })
+
+    CombatToggles:AddToggle("G24F5SA2XCGH45SG", {
+        Text = "Loud Gun",
+        Default = AvexSettings.Features.LoudGun,
+        Tooltip = "Will make gunshots from your client super loud.",
+        Callback = function(Value)
+            AvexSettings.Features.LoudGun = Value
+        end
+    })
+    
+    --[[
+    CombatToggles:AddToggle("UDM8RWRXF89981JY", {
+        Text = "Advanced Weapon Multiplier",
+        Default = AvexSettings.Features.WeaponMultiplier.Enabled,
+        Tooltip = "Allows you to shoot many bullets at once with your own settings.",
+        Callback = function(Value)
+            AvexSettings.Features.WeaponMultiplier.Enabled = Value
+        end
+    })
+    ]]
+    
+    CombatDropdowns:AddDropdown("NE5R0NU8UJIODCPI", {
+        Values = {
+            "Automatic",
+            "Semi Automatic"
+        },
+        Default = "",
+        Multi = false,
+        Text = "Gun Firemode:",
+        Tooltip = "Firemode setting for gun modifications.", 
+        Callback = function(Value)
+            if Value == "Automatic" then
+                AvexSettings.Storage.GunModifications.Mode = "ANS"
+            elseif Value == "Semi Automatic" then
+                AvexSettings.Storage.GunModifications.Mode = "GNS"
+            end
+        end
+    })
+
+    CombatDropdowns:AddDropdown("GNMJ47HJ0KJMBC4D", {
+        Values = {
+            "Orbit",
+            "Randomize"
+        },
+        Default = "",
+        Multi = false,
+        Text = "Strafe Type:",
+        Tooltip = "Sets the type of movement that the strafe uses.", 
+        Callback = function(Value)
+            AvexSettings.Features.SilentAim.Strafe.Type = Value
+        end
+    })
+
+    CombatDropdowns:AddDropdown("BBF578JHMHNXF4JH", {
+        Values = {
+            "Rogue",
+            "Flagged",
+            "Both"
+        },
+        Default = "",
+        Multi = false,
+        Text = "Killfarm Targets:",
+        Tooltip = "Sets the targetting system for the killfarm.", 
+        Callback = function(Value)
+            AvexSettings.Features.FarmKills.TargetMode = Value
+        end
+    })
+    
+    CombatDropdowns:AddDropdown("DZ39FBLS60QM6Y6I", {
+        Values = {
+            "Rogue",
+            "Flagged",
+            "Both"
+        },
+        Default = "",
+        Multi = false,
+        Text = "Killaura Targets:",
+        Tooltip = "Sets the targetting system for the killaura.", 
+        Callback = function(Value)
+            AvexSettings.Features.Killaura.TargetMode = Value
+        end
+    })
+
+    CombatSliders:AddSlider("QR5Y2PT7V5KBQJ4G", {
+        Text = "Strafe Speed",
+        Default = AvexSettings.Features.SilentAim.Strafe.Speed,
+        Min = 1,
+        Max = 15,
+        Rounding = 0,
+        Compact = true,
+        Callback = function(Value)
+            AvexSettings.Features.SilentAim.Strafe.Speed = Value
+        end
+    })
+
+    CombatSliders:AddSlider("CF72BH5CAS7WT6WH", {
+        Text = "Strafe Distance",
+        Default = AvexSettings.Features.SilentAim.Strafe.Distance,
+        Min = 1,
+        Max = 35,
+        Rounding = 0,
+        Compact = true,
+        Callback = function(Value)
+            AvexSettings.Features.SilentAim.Strafe.Distance = Value
+        end
+    })
+    
+    CombatSliders:AddSlider("TJ9BFZAPKN4PZUGF", {
+        Text = "FOV Size",
+        Default = AvexSettings.Features.SilentAim.FieldOfView,
+        Min = 1,
+        Max = 750,
+        Rounding = 0,
+        Compact = true,
+        Callback = function(Value)
+            AvexSettings.Features.SilentAim.FieldOfView = Value
+        end
+    })
+
+    CombatSliders:AddSlider("GVF26IJ4KH4PHN74", {
+        Text = "Hit Chance",
+        Default = AvexSettings.Features.SilentAim.HitChance,
+        Min = 0,
+        Max = 100,
+        Rounding = 0,
+        Compact = true,
+        Callback = function(Value)
+            AvexSettings.Features.SilentAim.HitChance = Value
+        end
+    })
+    
+    --[[
+    CombatSliders:AddSlider("FSG35P3I668LVLEP", {
+        Text = "Bullet Amount",
+        Default = AvexSettings.Features.WeaponMultiplier.Bullets,
+        Min = 1,
+        Max = 7,
+        Rounding = 0,
+        Compact = true,
+        Callback = function(Value)
+            AvexSettings.Features.WeaponMultiplier.Bullets = Value
+        end
+    })
+    
+    CombatSliders:AddSlider("VL5DM6PI0XZMY5UG", {
+        Text = "Bullet Time",
+        Default = AvexSettings.Features.WeaponMultiplier.BulletTime,
+        Min = 0,
+        Max = 5,
+        Rounding = 1,
+        Compact = true,
+        Callback = function(Value)
+            AvexSettings.Features.WeaponMultiplier.BulletTime = Value
+        end
+    })
+    ]]
+    
+    CombatSliders:AddSlider("ZA0ZMVCKJ954SRC5", {
+        Text = "Spread Modification",
+        Default = AvexSettings.Storage.GunModifications.Spread,
+        Min = 0,
+        Max = 25,
+        Rounding = 0,
+        Compact = true,
+        Callback = function(Value)
+            AvexSettings.Storage.GunModifications.Spread = Value
+        end
+    })
+    
+    CombatSliders:AddSlider("ORD8SHH4RIKNVXB8", {
+        Text = "Rate Modification",
+        Default = AvexSettings.Storage.GunModifications.FireRate,
+        Min = 0,
+        Max = 5,
+        Rounding = 1,
+        Compact = true,
+        Callback = function(Value)
+            AvexSettings.Storage.GunModifications.FireRate = Value
+        end
+    })
+    
+    CombatSliders:AddSlider("CTU2Q9YKATVZRF3C", {
+        Text = "Sound Modification",
+        Default = AvexSettings.Storage.GunModifications.Sound,
+        Min = 1,
+        Max = 22,
+        Rounding = 0,
+        Compact = true,
+        Callback = function(Value)
+            AvexSettings.Storage.GunModifications.Sound = Value
+        end
+    })
+    
+    CombatSliders:AddSlider("5CN880CA6Q0NK07X", {
+        Text = "Animation Modification",
+        Default = AvexSettings.Storage.GunModifications.Animation,
+        Min = 1,
+        Max = 5,
+        Rounding = 0,
+        Compact = true,
+        Callback = function(Value)
+            AvexSettings.Storage.GunModifications.Animation = Value
+        end
+    })
+    
+    CombatButtons:AddButton({
+        Text = "Modify Weapon",
+        Func = function()
+            local HasGun, Gun = FindGun(Client)
+            if HasGun and Gun ~= nil then
+                Instance.new("Sound", Gun.Handle).Name = "Fire"
+                Instance.new("Sound", Gun.Handle).Name = "Fire2"
+                Instance.new("Sound", Gun.Handle).Name = "Equip"
+                Instance.new("Sound", Gun.Handle).Name = "Pump"
+                Instance.new("Sound", Gun.Handle).Name = "Reload"
+                Instance.new("Sound", Gun.Handle).Name = "Trigger"
+        
+                if AvexSettings.Storage.GunModifications.Mode == "ANS" and AvexSettings.Storage.GunModifications.Animation > 3 then
+                    AvexSettings.Storage.GunModifications.Animation = 3
+    
+                    UserInterface:Notify("Animation must be below 4 with Automatic!", 2)
+                    return
+                end
+        
+                Gun.Parent = Client.Backpack
+        
+                require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("TS"):WaitForChild(AvexSettings.Storage.GunModifications.Mode)).Initiate(Gun, Gun:GetAttribute("ReloadTime"), Gun:GetAttribute("MaxAmmo"), AvexSettings.Storage.GunModifications.FireRate, Gun:GetAttribute("Damage"), AvexSettings.Storage.GunModifications.Spread, AvexSettings.Storage.GunModifications.Sound, AvexSettings.Storage.GunModifications.Animation, nil, Gun:GetAttribute("AmmoType"), nil, nil, nil)
+
+                if Gun:FindFirstChild("LocalScript") then
+                    Gun.LocalScript.Parent = nil
+                end
+        
+                Gun.Parent = Client.Character
+                UserInterface:Notify("Modded: "..tostring(Gun.Name), 2)
+                
+                Gun.Name = "[Modded] "..tostring(Gun.Name)
+            end
+        end,
+        DoubleClick = false,
+        Tooltip = "Will modify current held gun with the settings entered."
+    })
+    
+    CombatButtons:AddButton({
+        Text = "Instant Kill Melee",
+        Func = function()
+            local Melee = Client.Character and Client.Character:FindFirstChildOfClass("Tool")
+    
+            if Melee and (not Melee:FindFirstChild("Reload")) and Melee:FindFirstChild("LocalScript") then
+                for i = 1, 50 do
+                    Melee.LocalScript:Clone().Parent = Melee
+                end
+        
+                UserInterface:Notify("Melee modified.", 2)
+            end
+        end,
+        DoubleClick = false,
+        Tooltip = "Makes any held melee weapon instantly kill."
+    })
+    
+    CombatButtons:AddButton({
+        Text = "Sniper Shotgun",
+        Func = function()
+            local Remington = Client.Character and Client.Character:FindFirstChild("Remington")
+    
+            if Remington and Remington:FindFirstChild("LocalScript") then
+                Remington.Parent = Client.Backpack
+                Remington.LocalScript:Destroy()
+        
+                require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("TS"):WaitForChild("SHT")).Initiate(Remington, 2.1, 6, 0.4, 20, 0, 4, nil, nil, "Heavy Ammo") --Gun mods on this game suck
+                Remington.Parent = Client.Character
+                UserInterface:Notify("Shotgun Snipified", 2)
+            end
+        end,
+        DoubleClick = false,
+        Tooltip = "Modifies remington to shoot like a sniper."
+    })
+    
+    CombatButtons:AddButton({
+        Text = "Weapon Multiplier",
+        Func = function()
+            local Gun = Client.Character and Client.Character:FindFirstChildOfClass("Tool")
+    
+            if Gun and Gun.Name == "Remington" then
+                local Connections = {}
+        
+                Gun.Parent = Client.Backpack
+                Gun.Name = "Minigun Shotgun"
+        
+                if Gun:FindFirstChild("LocalScript") then
+                    Gun.LocalScript:Destroy()
+                end
+        
+                Instance.new("Sound", Gun.Handle).Name = "Fire"
+                Instance.new("Sound", Gun.Handle).Name = "Fire2" --idk why you need new sounds but ok
+                require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("TS"):WaitForChild("ANS")).Initiate(Gun, 2.1, 6, .0125/2, 20, 10, 11, 1, nil, "Heavy Ammo", 2)
+        
+                Gun.Parent = Client.Character
+        
+                local Pump = Gun.Handle.Pump
+                local Reload = Gun.Handle.Reload
+                local Trigger = Gun.Handle.Trigger
+                local Equip = Gun.Handle.Equip
+        
+                Connections.Equip = Gun.Equipped:Connect(function()
+                    Equip:Play()
+                    task.wait(.2)
+                    Trigger:Play()
+                    task.wait(.4)
+                    Pump:Play()
+                end)
+        
+                Connections.Unequip = g.Unequipped:Connect(function()
+                    Equip:Play()
+                    task.wait(.2)
+                    Trigger:Play()
+                end)
+        
+                UserInterface:Notify("Shotgun Minigunified", 2)
+                return
+            end
+        
+            if Gun and Gun:FindFirstChild("LocalScript") then
+                Gun.LocalScript:Clone().Parent = Gun
+        
+                UserInterface:Notify("Weapon Multiplied", 2)
+            end
+        end,
+        DoubleClick = false,
+        Tooltip = "Multiplies the amount of times the gun fires at once, takes more ammo."
+    })
+    
+    CombatButtons:AddButton({
+        Text = "Whitelist/Unwhitelist",
+        Func = function()
+            if Selected then
+                local Target = table.find(Whitelisted, tostring(Selected))
+        
+                if Target then
+                    table.remove(Whitelisted, Target)
+        
+                    UserInterface:Notify("Removed from Whitelist", 2)
+                    return
+                end
+        
+                table.insert(Whitelisted, tostring(Selected))
+                UserInterface:Notify("Added to Whitelist", 2)
+            end
+        end,
+        DoubleClick = false,
+        Tooltip = "Will whitelist chosen player from any combat features such as: click-kill, silent aim and killaura."
+    })
+    
+    CombatButtons:AddButton({
+        Text = "Blacklist/Unblacklist [Healaura]",
+        Func = function()
+            if Selected then
+                local Target = table.find(Blacklisted, tostring(Selected))
+        
+                if Target then
+                    table.remove(Blacklisted, Target)
+        
+                    UserInterface:Notify("Removed from Healaura Whitelist", 2)
+                    return
+                end
+        
+                table.insert(Blacklisted, tostring(Selected))
+                UserInterface:Notify("Added to Healaura Whitelist", 2)
+            end
+        end,
+        DoubleClick = false,
+        Tooltip = "Will blacklist chosen player from healaura."
+    })
+    
+    
+    CombatButtons:AddButton({
+        Text = "Kill Selected",
+        Func = function()
+            local Target = Selected
+            local HasGun, Gun = FindGun(Client)
+
+            if HasGun and Target and Target.Character and (GetCriminalState(Target) == "Rogue" or (GetCriminalState(Client) == "Flagged" or GetCriminalState(Client) == "Rogue")) then
+                if Target.Character:FindFirstChild("ForceField") then 
+                    repeat task.wait() until (not Target.Character:FindFirstChild("ForceField"))
+                end
+
+                if Collecting then
+                    repeat task.wait() until (not Collecting)
+                end
+
+                Collecting = true
+
+                local OldPivot = Client.Character:GetPivot()
+                if Gun then
+                    repeat 
+                        if Gun.Parent ~= Client.Character then break end
+
+                        Client.Character:PivotTo(Target.Character:GetPivot())
+                        task.wait(Gun:GetAttribute("BulletPerSecond"))
+                        Shoot(Target)
+                        Client.Character:PivotTo(Target.Character:GetPivot())
+                    until Gun == nil or (not (Target.Character and FindChild(Target.Character, "Head"))) or Target.Character.Humanoid.Health == 0 or (not (Client.Character and FindChild(Client.Character, "Head")))
+                end
+
+                Client.Character:PivotTo(OldPivot)
+                Collecting = false
+            end
+        end,
+        DoubleClick = false,
+        Tooltip = "Self-explanatory."
+    })
+    
+    
+    
+    SetTextboxes:AddInput("DV9K6K2GB1ZOK5N6", {
+        Default = "",
+        Numeric = false,
+        Finished = true,
+        Text = "Select Player",
+        Tooltip = "Enter name or shortened name of a player and enter to select them.",
+        Placeholder = "Display or User",
+        Callback = function(Value)
+            Selected = FindPlayer(Value)
+        end
+    })
+    
+    SetExtra:AddToggle("GUYYQJLD1L9PCEP7", {
+        Text = "Keybind Frame",
+        Default = false,
+        Tooltip = "Enable keybind frame to view all keybinds.",
+        Callback = function(Value)
+            UserInterface.KeybindFrame.Visible = Value
+        end
+    })
+
+    SetExtra:AddLabel("Credits;")
+    SetExtra:AddLabel("Legacy: Scripting, Loading UI")
+    SetExtra:AddLabel("2Posr: Whitelist System")
+    SetExtra:AddLabel("Inori, Wally, Stefanuk: Main UI")
+    
+    SetButtons:AddButton({
+        Text = "Copy Audio",
+        Func = function()
+            if Selected and workspace.Buildings:FindFirstChild(Selected.Name) and workspace.Buildings[Selected.Name]:FindFirstChild("Jukebox") then
+                writefile(Selected.Name.."_Audio.txt", tostring(workspace.Buildings[Selected.Name].Jukebox.Speaker.Sound.SoundId):sub(12))
+            end
+        end,
+        DoubleClick = false,
+        Tooltip = "Copies the audio playing on the selected's node."
+    })
+
+    SetButtons:AddButton({
+        Text = "Copy Node",
+        Func = function()
+            if Selected then
+                CopyNode(Selected.Name)
+            end
+        end,
+        DoubleClick = false,
+        Tooltip = "Copies the build currently loaded by the selected."
+    })
+
+    
+    SetButtons:AddButton({
+        Text = "Copy Outfit",
+        Func = function()
+            if Selected then
+                writefile(Selected.Name.."_Outfit.txt", tostring(Selected.PlayerData.Outfit.Value))
+            end
+        end,
+        DoubleClick = false,
+        Tooltip = "Copies selected's outfit."
+    })
+    
+    SetButtons:AddButton({
+        Text = "Break Kill",
+        Func = function()
+            BreakKill = true
+        end,
+        DoubleClick = false,
+        Tooltip = "Breaks the killfunction."
+    })
+    
+    SetButtons:AddButton({
+        Text = "Distress Call",
+        Func = function()
+            Players:Chat("AvexMSGT:Distress")
+        end,
+        DoubleClick = false,
+        Tooltip = "Sends a distress signal to all Project Avex users in the game, with a prompt to teleport to you."
+    })
+    
+    if table.find(AvexAdmins, Client.Name) then
+        SetButtons:AddButton({
+            Text = "Bring Users",
+            Func = function()
+                Players:Chat("AvexACMD:Bring")
+            end,
+            DoubleClick = false,
+            Tooltip = "I take it as you aren't retarded"
+        })
+    
+        SetButtons:AddButton({
+            Text = "Kick Users",
+            Func = function()
+                Players:Chat("AvexACMD:Kick")
+            end,
+            DoubleClick = false,
+            Tooltip = "I take it as you aren't retarded"
+        })
+    end
+
+    SetButtons:AddButton({
+        Text = "Rejoin Server",
+        Func = function()
+            game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId)
+        end,
+        DoubleClick = true,
+        Tooltip = "Instantly rejoins the current sever with a 100% accuracy"
+    })
+
+    SetButtons:AddButton({
+        Text = "Unload Avex",
+        Func = function()
+            UserInterface:Unload()
+        end,
+        DoubleClick = true,
+        Tooltip = "Unloads the UserInterface and scripts."
+    })
+    
+    SaveManager:BuildConfigSection(Settings)
+    
+    Set:AddLabel("Toggle UI"):AddKeyPicker("5CEF0CQT9DF5SV6Y", {
+        Mode = "Toggle",
+        Default = "Backspace",
+        Text = "",
+        NoUI = true,
+        Callback = function(Value)
+            task.spawn(UserInterface.Toggle)
+        end
+    })
+    
+    task.spawn(function()
+        while ScriptRunning and RunService.RenderStepped:Wait() do
+            for _, Update in pairs(EspUpdates) do
+                local Success, Error = pcall(UpdateESP, Update)
+                if (not Success) then
+                    warn(Error)
+                end
+            end
+        end
+    end)
+    
+    task.spawn(function()
+        while ScriptRunning and task.wait(.1) do 
+            if AvexSettings.Features.Killaura.Toggled then
+                for _, Player in ipairs(Players:GetPlayers()) do
+                    local Nametag, HasTag = FindTag(Player.Character)
+                    local HasGun, Gun = FindGun(Client)
+                    if HasGun and HasTag and Gun:GetAttribute("Ammo") ~= 0 and Player ~= Client and Player.Character and FindChild(Player.Character, "Head") then
+                        if FindChild(Player.Character, "Humanoid") and Player.Character.Humanoid.Health ~= 0 then
+                            if ((AvexSettings.Features.Killaura.TargetMode == "Rogue" and GetCriminalState(Player) == "Rogue") or (AvexSettings.Features.Killaura.TargetMode == "Flagged" and GetCriminalState(Player) == "Flagged" and (GetCriminalState(Client) == "Flagged" or GetCriminalState(Client) == "Rogue")) or (AvexSettings.Features.Killaura.TargetMode == "Both" and (GetCriminalState(Player) == "Rogue" or GetCriminalState(Player) == "Flagged" and (GetCriminalState(Client) == "Flagged" or GetCriminalState(Client) == "Rogue")))) then
+                                if DistanceFrom(Client, Player.Character:GetPivot().Position) <= 225 and (not table.find(Whitelisted, Player.Name)) and (not table.find(AvexUsers, Player.Name)) then
+                                    if IsCharacterVisible(Player.Character) then
+                                        Shoot(Player)
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end 
+            end
+
+            if AvexSettings.Features.FarmKills.Toggled then
+                for _, Player in pairs(Players:GetPlayers()) do
+                    local Nametag, HasTag = FindTag(Player.Character)
+                    local HasGun, Gun = FindGun(Client)
+                    if HasGun and HasTag and Gun:GetAttribute("Ammo") ~= 0 and Player ~= Client and Player.Character and FindChild(Player.Character, "Head") then
+                        if FindChild(Player.Character, "Humanoid") and Player.Character.Humanoid.Health ~= 0 then
+                            if ((AvexSettings.Features.FarmKills.TargetMode == "Rogue" and GetCriminalState(Player) == "Rogue") or (AvexSettings.Features.FarmKills.TargetMode == "Flagged" and GetCriminalState(Player) == "Flagged" and (GetCriminalState(Client) == "Flagged" or GetCriminalState(Client) == "Rogue")) or (AvexSettings.Features.FarmKills.TargetMode == "Both" and (GetCriminalState(Player) == "Rogue" or GetCriminalState(Player) == "Flagged" and (GetCriminalState(Client) == "Flagged" or GetCriminalState(Client) == "Rogue")))) then
+                                if (not table.find(Whitelisted, Player.Name)) and (not table.find(AvexUsers, Player.Name)) then
+                                    Client.Character:PivotTo(Player.Character:GetPivot() + Player.Character:GetPivot().LookVector * -5)
+                                    Shoot(Player)
+                                end
+                            end
+                        end
+                    end
+                end 
+            end
+    
+            if AvexSettings.Features.Healaura then
+                for _, Player in pairs(Players:GetPlayers()) do
+                    local MediGun = Client.Character and (Client.Character:FindFirstChild("MediGun") or Client.Character:FindFirstChild("[Doctor] MediGun"))
+                    if MediGun and Player ~= Client and Player.Character and FindChild(Player.Character, "Humanoid") and Player.Character.Humanoid.Health ~= 0 then
+                        if DistanceFrom(Client, Player.Character:GetPivot().Position) <= 20 and (not table.find(Blacklisted, Player.Name)) then
+                            if Player.Character.Humanoid.Health ~= 0 and Player.Character.Humanoid.Health ~= Player.Character.Humanoid.MaxHealth then
+                                for i = 1, 35 do
+                                    ReplicatedStorage.Events.ToolsEvent:FireServer(5, Player.Character.Humanoid)
+                                    task.wait(.043)
+                                    ReplicatedStorage.Events.ToolsEvent:FireServer(5, MediGun)
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+    
+    
+            if AvexSettings.Features.StoreAura then
+                for _, Entity in pairs(workspace.Entities:GetChildren()) do
+                    if Entity.Name == "Gun" and DistanceFrom(Client, Entity:GetPivot().Position) <= 15 then
+                        if (not Client.Flagged.Value) and #Client.PlayerData.Inventory.Value:split(",") < 12 then
+                            ReplicatedStorage.Events.InventoryEvent:FireServer(2, Entity)
+                        else
+                            ReplicatedStorage.Events.InteractEvent:FireServer(Entity)
+                        end
+                    end
+                end
+            end
+        end
+    end)
+    
+    task.spawn(function()
+        while ScriptRunning and task.wait(2) do
+            if AvexSettings.Features.AureusFarm then
+                for _, Building in pairs(workspace.Buildings:GetChildren()) do
+                    for _, Prop in pairs(Building:GetChildren()) do
+                        if Prop and Prop.Name == "Scavenge Station" and DistanceFrom(Client, Prop:GetPivot().Position) <= 10 and (os.time() - Client.PlayerData.DScavenge.Value) > 0 then
+                            ReplicatedStorage.Events.MenuAcitonEvent:FireServer(1, Prop)
+    
+                            local Drone = workspace.Drones:WaitForChild(Client.Name, 1 / 0)
+                            local ShipmentTarget = workspace:WaitForChild("DroneShipment", 1 / 0):GetPivot()
+
+                            if Drone then
+                                Drone:PivotTo(ShipmentTarget + ShipmentTarget.UpVector * 1.5)
+                            
+                                repeat task.wait(.1)
+                                    ReplicatedStorage.Events.MenuAcitonEvent:FireServer(3)
+                                until (not workspace:FindFirstChild("DroneShipment"))
+        
+                                Drone:PivotTo(Prop:GetPivot() + Prop:GetPivot().UpVector * 2)
+        
+                                repeat task.wait(.1)
+                                    ReplicatedStorage.Events.MenuAcitonEvent:FireServer(4)
+                                until (not workspace.Drones:FindFirstChild(Client.Name))
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
+    
+    task.wait(1.5)
+    Players:Chat("AvexMSGT:1")
+    UserInterface:Notify("Project Avex Took: "..tonumber(math.floor(tick() - StartTick)).." seconds to load.", 2)
+    return
+end)
+
+if (not ScriptLoaded) then
+    warn(ScriptError)
+end
